@@ -55,8 +55,11 @@ namespace BeamSplit.UI
         {
             if (canvasGroup == null)
             {
+                Debug.LogError($"[{GetType().Name}] canvasGroup is not assigned; panel cannot show or hide.");
                 return;
             }
+
+            Debug.Log($"[{GetType().Name}] SetVisible({visible}, immediate={immediate}) on {name}, current alpha={canvasGroup.alpha}");
 
             canvasGroup.interactable = visible;
             canvasGroup.blocksRaycasts = visible;

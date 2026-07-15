@@ -1,6 +1,7 @@
 using BeamSplit.Data;
 using BeamSplit.Gameplay.Objective;
 using BeamSplit.Gameplay.Placement;
+using BeamSplit.Managers;
 using BeamSplit.UI;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -59,6 +60,7 @@ namespace BeamSplit.Gameplay
         public void SetInputEnabled(bool enabled)
         {
             isInputEnabled = enabled;
+            Debug.Log($"[PlacementController] SetInputEnabled({enabled}) on {name}.");
         }
 
         private void Update()
@@ -90,23 +92,26 @@ namespace BeamSplit.Gameplay
 
         private void HandleClick()
         {
-            if (!isInputEnabled)
-            {
-                return;
-            }
-
             if (!TryGetPointerDownPosition(out Vector2 screenPosition))
             {
                 return;
             }
 
+            if (!isInputEnabled)
+            {
+                Debug.Log("[PlacementController] HandleClick: tap detected but isInputEnabled is false, ignoring input.");
+                return;
+            }
+
             if (UIRaycastGate.IsPointerOverUI())
             {
+                Debug.Log("[PlacementController] HandleClick: pointer is over UI, ignoring.");
                 return;
             }
 
             if (gridManager == null || beamSimulator == null || targetCamera == null)
             {
+                Debug.LogError($"[PlacementController] HandleClick: missing reference(s) - gridManager={gridManager != null}, beamSimulator={beamSimulator != null}, targetCamera={targetCamera != null}.");
                 return;
             }
 
@@ -117,10 +122,12 @@ namespace BeamSplit.Gameplay
             Vector2Int? gridPos = gridManager.GetGridPosition(worldPos);
             if (!gridPos.HasValue)
             {
+                Debug.Log($"[PlacementController] HandleClick: screen {screenPosition} -> world {worldPos} is out of grid bounds.");
                 return;
             }
 
             Vector2Int cell = gridPos.Value;
+            Debug.Log($"[PlacementController] HandleClick: screen {screenPosition} -> world {worldPos} -> cell {cell}, mode={currentMode}.");
 
             if (currentMode == PlacementMode.Erase)
             {
@@ -131,16 +138,18 @@ namespace BeamSplit.Gameplay
             if (beamSimulator.HasPlacement(cell))
             {
                 // Toggle: clicking an occupied cell (that isn't valid to place onto) removes it.
+                Debug.Log($"[PlacementController] HandleClick: cell {cell} already occupied, erasing instead.");
                 TryErase(cell);
                 return;
             }
 
             if (!gridManager.IsValidPlacementPoint(cell))
             {
-                Debug.Log($"[PlacementController] Rejected placement at {cell}: not a valid placement point.");
+                Debug.Log($"[PlacementController] Rejected placement at {cell}: not a valid placement point (must have an active beam crossing it, not be a wall/receiver cell).");
                 return;
             }
 
+            Debug.Log($"[PlacementController] HandleClick: cell {cell} is valid, placing {currentMode}.");
             PlaceCurrentMode(cell);
         }
 
@@ -188,6 +197,7 @@ namespace BeamSplit.Gameplay
                     beamSimulator.RemovePlacement(cell);
                     Destroy(obj.gameObject);
                     beamSimulator.Recalculate();
+                    AudioManager.Instance?.PlayErase();
                     return;
                 }
             }
@@ -210,6 +220,10 @@ namespace BeamSplit.Gameplay
                         component = mirror;
                         placedKind = PlacementKind.Mirror;
                     }
+                    else
+                    {
+                        Debug.LogError("[PlacementController] PlaceCurrentMode: mirrorTilePrefab is not assigned.");
+                    }
                     break;
 
                 case PlacementMode.FilterRed:
@@ -224,19 +238,28 @@ namespace BeamSplit.Gameplay
                         component = filter;
                         placedKind = PlacementKind.Filter;
                     }
+                    else
+                    {
+                        Debug.LogError("[PlacementController] PlaceCurrentMode: filterTilePrefab is not assigned.");
+                    }
                     break;
             }
 
             if (component == null)
             {
+                Debug.LogWarning($"[PlacementController] PlaceCurrentMode: no component instantiated for mode {currentMode} at {cell}.");
                 return;
             }
 
             if (!beamSimulator.TryPlace(cell, component))
             {
+                Debug.LogWarning($"[PlacementController] PlaceCurrentMode: beamSimulator.TryPlace rejected {currentMode} at {cell} (cell already occupied?); destroying instance.");
                 Destroy(((Component)component).gameObject);
                 return;
             }
+
+            Debug.Log($"[PlacementController] PlaceCurrentMode: successfully placed {currentMode} at {cell}.");
+            AudioManager.Instance?.PlayPlace();
 
             // Win/lose race: Recalculate() may synchronously fire OnAllReceiversActive ->
             // HandleWin, which sets level-flow state to Won BEFORE we get a chance to

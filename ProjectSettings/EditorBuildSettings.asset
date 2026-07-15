@@ -5,9 +5,18 @@ EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
   m_Scenes:
-  - enabled: 1
+  - enabled: 0
     path: Assets/Scenes/Gameplay.unity
     guid: 8c9cfa26abfee488c85f1582747f6a02
+  - enabled: 1
+    path: Assets/Scenes/SplashScreen.unity
+    guid: de05e1e11e8f6214eb09fad7011793b8
+  - enabled: 1
+    path: Assets/Scenes/MainMenu.unity
+    guid: 22647ef3abf0783479f3dc2626f7f9da
+  - enabled: 1
+    path: Assets/Scenes/CoreSimTest.unity
+    guid: 4cd1381cf5cf40f6aafbf4d831b379db
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 2bcd2660ca9b64942af0de543d8d7100, type: 3}
   m_UseUCBPForAssetBundles: 0

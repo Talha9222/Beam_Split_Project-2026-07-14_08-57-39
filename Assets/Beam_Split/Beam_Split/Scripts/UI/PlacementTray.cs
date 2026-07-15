@@ -1,6 +1,7 @@
 using BeamSplit.Data;
 using BeamSplit.Gameplay;
 using BeamSplit.Gameplay.Powerups;
+using BeamSplit.Managers;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -66,6 +67,7 @@ namespace BeamSplit.UI
         private void SelectMode(PlacementController.PlacementMode mode)
         {
             placementController.SetMode(mode);
+            AudioManager.Instance?.PlayButtonClick();
             RefreshSelectedOutline();
         }
 

@@ -9,8 +9,9 @@ namespace BeamSplit.UI
     /// <summary>
     /// Toast system. Scene singleton (static Instance, same pattern as GridManager/
     /// EconomyManager). Fixed pool of 4 pre-instantiated, initially-inactive toast
-    /// instances (mirrors BeamRenderer's fixed-pool-no-growth pattern). Multiple concurrent
-    /// messages stack upward with a fixed vertical offset per active toast.
+    /// instances (mirrors BeamRenderer's fixed-pool-no-growth pattern). Anchored to the
+    /// top of the screen (not the bottom) so a bottom banner ad can't cover them; stacks
+    /// downward with a fixed vertical offset per active toast.
     /// </summary>
     public class NotificationManager : MonoBehaviour
     {
@@ -73,7 +74,7 @@ namespace BeamSplit.UI
             for (int i = 0; i < active.Count; i++)
             {
                 var rect = active[i].rectTransform;
-                rect.anchoredPosition = new Vector2(0f, i * GameConstants.ToastStackOffsetY);
+                rect.anchoredPosition = new Vector2(0f, -GameConstants.ToastTopMargin - i * GameConstants.ToastStackOffsetY);
             }
         }
 

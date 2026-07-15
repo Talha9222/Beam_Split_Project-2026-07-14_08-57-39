@@ -8,6 +8,24 @@ rewired, update the relevant section below in the same change. This file is mean
 the only context needed before making a change — don't make future work re-derive it by
 re-reading every script from scratch.
 
+## Behavioral guidelines (CLAUDERULES.md)
+
+The repo root also has a `CLAUDERULES.md` with general behavioral guidelines that apply
+on top of everything below. Read it before implementing anything. Summary (biases
+toward caution over speed; use judgment for trivial tasks):
+
+1. **Think before coding** — state assumptions explicitly; if uncertain, ask. Present
+   multiple interpretations rather than silently picking one. Say so if a simpler
+   approach exists. Stop and ask if something is unclear.
+2. **Simplicity first** — minimum code that solves the problem; no speculative
+   features, abstractions, "flexibility," or error handling for impossible scenarios.
+3. **Surgical changes** — touch only what the task requires; don't improve/refactor
+   adjacent code; match existing style; remove only the imports/vars/functions your own
+   change orphaned, not pre-existing dead code (mention it instead).
+4. **Goal-driven execution** — turn tasks into verifiable success criteria (e.g. a
+   failing test that then passes) and state a brief step → verify plan for multi-step
+   work.
+
 ## Project overview
 
 Beam Split is a Unity 6 (Editor version **6000.3.8f1**) 2D URP mobile puzzle game: a
@@ -16,8 +34,9 @@ beam into two 45°-diagonal branches) and Filters (which additively tint a beam'
 to route the correct color of light onto each Receiver simultaneously. Full game design
 lives in the spec the user provided (20 levels across 4 phases, full UI, audio,
 monetization) — **the core simulation layer plus objectives/economy/powerups/UI for 5
-levels are implemented so far** (see "Build status" below); everything else (menus,
-level-select, the other 15 levels, audio, ads, star rating, moving receivers) is
+levels are implemented so far**, plus audio (`AudioManager`) and test-ad monetization
+(banner/interstitial/rewarded, see "Ads" below) (see "Build status" below); everything
+else (menus, level-select, the other 15 levels, star rating, moving receivers) is
 deferred to later phases.
 
 Target platform is **mobile (touch)**, not desktop — this affects input handling (see
@@ -62,10 +81,14 @@ no duplicate fileIDs — checked programmatically) but **not yet opened in the E
 Treat the whole Phase 2 scene addition as fragile until opened once — see "Required
 manual Editor steps" below for the exact checklist.
 
-Not yet built: menus/level-select scene (Next Level / Menu buttons are documented
-stubs — see `LevelLoader.OnMenuStub`/`OnNextLevelStub`), audio, ads, star rating, moving
-receivers, the other 15 levels (of the planned 20), final art (all Phase 2 UI uses flat-
-color placeholder `Image`s, no sliced sprites from `Art/BEAM SPLIT UI + ASSETS`).
+Since implemented (post-Phase-2, not covered by the paragraph above): a working
+`MainMenu.unity` with real Play/Quit/Next-Level/Retry/Menu navigation (no more stubs —
+see `LevelLoader`'s "Runtime wiring" below), `AudioManager` (see "Audio"), and test-ad
+monetization — banner/interstitial/rewarded (see "Ads"). Still not built: a proper
+level-select scene (Next Level currently just walks `LevelLoader.levels[]` in a fixed
+order), star rating, moving receivers, the other 15 levels (of the planned 20), and final
+art (all Phase 2 UI still uses flat-color placeholder `Image`s, no sliced sprites from
+`Art/BEAM SPLIT UI + ASSETS`).
 
 ## Project structure
 
@@ -79,20 +102,26 @@ Assets/Beam_Split/Beam_Split/
       Economy/         CoinLedger (pure C#), EconomyManager (MonoBehaviour singleton)
       Objective/        IObjectiveClock/UnityDeltaTimeClock, MoveLimitState/TimeLimitState
                         (pure C#), ObjectiveController (MonoBehaviour)
-      Powerups/         PowerupController (MonoBehaviour), PowerupCosts (const tunables)
+      Powerups/         PowerupController (MonoBehaviour; costs/grants are now its own
+                       serialized Inspector fields, not a separate const class — see
+                       "Powerups" below)
       Placement/        PlacementHistory (pure C#, LIFO undo stack)
     Managers/          LevelLoader (level-flow state machine), SaveManager (static,
-                       PlayerPrefs+JSON persistence)
+                       PlayerPrefs+JSON persistence), MainMenuManager (Play/Quit wiring
+                       for MainMenu.unity), LevelProgress (static hand-off for
+                       Next Level's scene-reload progression), AudioManager
+                       (DontDestroyOnLoad singleton, music+SFX, lives in MainMenu.unity)
     UI/                UIRaycastGate, PanelBase + 5 panels (Objective/Tutorial/Win/Lose/
                        Pause), HUD, PlacementTray, NotificationManager (toast pool),
-                       HintHighlighter
+                       HintHighlighter, CoinRewardEffect (win-screen coin-fly juice)
     Utilities/         CanvasGroupFader, GameConstants
     Tests/Editor/      EditMode tests for the pure-logic classes
     BeamSplit.Runtime.asmdef   (references Unity.InputSystem, Unity.TextMeshPro)
   Prefabs/             Emitter, MirrorTile, FilterTile, Receiver, BeamLineRenderer, Wall
   Materials/           BeamAdditive.mat
-  Data/Levels/         TestLevel_Core.asset (dev-test level, kept unmodified — see
-                       "5 levels" below) + Level_01_FirstLight .. Level_05_DoubleSplit
+  Data/Levels/         Level_01_FirstLight .. Level_05_DoubleSplit (the 5 shipped
+                       levels; TestLevel_Core.asset, the original dev-test level, was
+                       deleted — see "5 shipped levels" below)
   Art/                 UI source art (BEAM SPLIT UI + ASSETS) — not yet wired into any UI
                        (Phase 2 UI uses flat-color placeholder Images)
 Assets/Scenes/
@@ -102,13 +131,24 @@ Assets/Scenes/
                        and 5 new scene-resident singletons (EconomyManager/
                        ObjectiveController/PowerupController/NotificationManager/
                        HintHighlighter) — see "UI/Canvas hierarchy" below.
-                       LevelLoader.currentLevel points at Level_01_FirstLight (was
-                       TestLevel_Core in Phase 1).
-  Gameplay.unity       Empty placeholder scene (Unity's default 2D template: Main
-                       Camera + Global Light 2D only) — not wired to any gameplay
-                       singleton and not referenced by LevelLoader or build settings.
-                       Reserved for a future menu/level-select or production scene;
-                       do not assume it has any of CoreSimTest's wiring.
+                       LevelLoader.currentLevel points at Level_01_FirstLight;
+                       LevelLoader.levels holds all 5 shipped levels in order for
+                       real Next Level progression.
+  MainMenu.unity       Minimal main-menu scene — Canvas (Bg image, PlayButton, QuitButton)
+                       + EventSystem + a scene-resident `MainMenuManager` (plain
+                       Transform, not UI, same "scene-resident singleton" pattern as
+                       CoreSimTest's managers). `MainMenuManager` wires PlayButton to
+                       `SceneManager.LoadScene("CoreSimTest")` and QuitButton to
+                       `Application.Quit()` (`EditorApplication.isPlaying = false` in the
+                       Editor) via `Button.onClick.AddListener` in `Awake()` — no
+                       persistent `OnClick` calls in the scene YAML, matching
+                       `PauseMenu`'s wiring style. No level-select exists yet, so Play
+                       always loads CoreSimTest directly (see "Build status"). First
+                       scene in Build Settings (index 0); CoreSimTest is index 1;
+                       Gameplay.unity has been removed from the project. Also holds the
+                       `AudioManager` GameObject (see "Audio" below) — it's placed here
+                       specifically because this is the first scene loaded, and
+                       `DontDestroyOnLoad` needs it to exist before CoreSimTest loads.
 Assets/Settings/       URP 2D renderer assets (UniversalRP.asset, Renderer2D.asset)
 Assets/UI/             New art asset staging area, separate from
                        Assets/Beam_Split/Beam_Split/Art/ — currently just
@@ -182,7 +222,17 @@ reintroduce RGB float addition).
 - **`Receiver`** — stores `requiredColor` + `IsActive`, fires `OnActivated`/
   `OnDeactivated` UnityEvents only on state transition (wired in the prefab to toggle
   the child `Glow` sprite's `SetActive`). Not sealed / `SetActive` is protected, so a
-  future `MovingReceiver : Receiver` can extend it (not implemented yet).
+  future `MovingReceiver : Receiver` can extend it (not implemented yet). `Configure()`
+  also calls `ApplyColorVisuals()`: picks the body sprite from the `colorSprites`
+  reference array (`ColorSpriteEntry[]`, one slot per `BeamColor` — assign per-color
+  sprites in the Inspector on `Receiver.prefab`; a color with no sprite assigned keeps
+  whatever sprite is already on `bodySpriteRenderer`). **Only Red/Blue/Yellow/Green have
+  actual receiver art** (White/Magenta/Orange slots are intentionally left empty) — so
+  level design should avoid requiring White/Magenta/Orange receivers; see the Level 4
+  postmortem below for the one place this already came up. `ApplyColorVisuals()` also
+  tints `glowSpriteRenderer` to the required color via `BeamRenderer.ToUnityColor`
+  (reused, not duplicated) with the
+  glow's own alpha preserved.
 - **`PlacementController`** — input + placement logic. **Touch-first** (mobile), falls
   back to mouse for Editor testing (`Touchscreen.current` checked before
   `Mouse.current`). Mode selection (Mirror/FilterRed/FilterBlue/FilterYellow/Erase) is
@@ -211,12 +261,24 @@ reintroduce RGB float addition).
   (each gates `placementController.SetInputEnabled(false)` until closed), then on
   `Playing` enables input and calls `objectiveController.BeginRunning()`. `HandleWin`/
   `HandleLose` each guard on `state != Playing` (ignore late-arriving events after
-  already won/lost), disable input, stop the objective clock, and show `WinPanel`
-  (awards `currentLevel.coinReward` via `EconomyManager.Award`) or `LosePanel`
-  ("Out of moves" / "Out of time"). `WinPanel`'s Next Level and `WinPanel`/`LosePanel`'s
-  Menu buttons call documented stub methods (`OnMenuStub`/`OnNextLevelStub` — just log,
-  no navigation exists yet). `LosePanel`'s Retry reloads the active scene (functional,
-  not a stub).
+  already won/lost), disable input, stop the objective clock, and show `WinPanel` or
+  `LosePanel` ("Out of moves" / "Out of time"). On win, `HandleWin` first kicks off
+  `CoinRewardEffect.PlayCoinReward` (if wired) to fly coin visuals into the HUD counter,
+  awarding a slice of the level's flat `coinReward` via `EconomyManager.Award` as each
+  one lands, and only calls `winPanel.Show(reward)` in that coroutine's `onComplete`
+  callback — **`WinPanel` deliberately doesn't appear until every coin has landed**.
+  Falls back to one immediate `Award(reward)` call followed immediately by
+  `winPanel.Show(reward)` if `coinRewardEffect` isn't assigned.
+  `WinPanel`'s Next Level button (`OnNextLevelClicked`) looks up `currentLevel`'s index
+  in the `levels` array and, if a next entry exists, sets `LevelProgress.PendingLevel`
+  and reloads this same scene (`Start()` picks up `LevelProgress.PendingLevel` before
+  falling back to the serialized `currentLevel`) — past the last level, or with no
+  `levels` array configured, falls through to the main menu instead. `WinPanel`/
+  `LosePanel`/`PauseMenu`'s Menu buttons (`GoToMainMenu`) all call
+  `SceneManager.LoadScene(mainMenuSceneName)` (defaults to `"MainMenu"`).
+  `PauseMenu.IsLevelPlaying` is wired to `LevelLoader.IsPlaying` in `Start()` so Resume
+  doesn't race a win/lose that happened while paused. `LosePanel`'s Retry reloads the
+  active scene (functional, not a stub).
 
 ### LevelData schema (`Data/LevelData.cs`, ScriptableObject)
 Core (Phase 1, unchanged): `levelNumber`, `gridWidth`/`gridHeight`, `parMirrorCount`
@@ -242,37 +304,32 @@ C# defaults until hand-edited):
 - **Tutorial**: `tutorialText` (per-level override; empty = use
   `TutorialPanel.DefaultTutorialText`).
 
-### Test level (`Data/Levels/TestLevel_Core.asset`)
-Kept **unmodified** as a 6th dev-test level (not deleted, not wired into the 5 shipped
-levels) — it's the worked example referenced by the mirror-reachability postmortem
-below, and the new LevelData fields are additive so it still loads fine with C# defaults
-(MoveLimit/10/50 coins/empty solution). 8×8 grid. Emitter at `(0,4)` facing Right.
-Receiver A at `(7,4)` requiring Red — sits directly on the emitter's straight path,
-reachable with just a Red filter anywhere upstream. Receiver B at `(6,7)` requiring
-Orange — reachable via a mirror at `(3,4)` (reflects the row-4 beam NE:
-`(4,5)→(5,6)→(6,7)`), with a Red filter placed upstream of the mirror and a Yellow
-filter placed only on the NE branch before `(6,7)`. `availableFilterColors`:
-Red/Blue/Yellow. `mirrorBudget`: 3.
-
 ### The 5 shipped levels (`Data/Levels/Level_01_FirstLight.asset` .. `Level_05_DoubleSplit.asset`)
-`LevelLoader.currentLevel` in the scene points at `Level_01_FirstLight`. All reachability
-was hand-derived against `GridDirection.Reflect`'s table and independently re-verified
-(`|Δx| == |Δy|` on every diagonal step) — see "Known issues fixed" #1 for why this
-matters.
+`LevelLoader.currentLevel` in the scene points at `Level_01_FirstLight` (the starting
+level); `LevelLoader.levels` holds all 5 in order for `OnNextLevelClicked` to walk
+through — see "Runtime wiring" below. `TestLevel_Core.asset` (the original dev-test
+6th level, worked example for the mirror-reachability postmortem in "Known issues
+fixed" #1) has been deleted now that the 5 shipped levels are the only ones in play —
+its geometry/solution notes live only in that postmortem entry now, not as a loadable
+asset. All 5 levels' reachability was hand-derived against `GridDirection.Reflect`'s
+table and independently re-verified (`|Δx| == |Δy|` on every diagonal step).
 
 | # | Name | Grid | Emitter | Mirrors | Receivers | Objective | Coins |
 |---|------|------|---------|---------|-----------|-----------|-------|
 | 1 | First Light | 6×6 | (0,3) E | none | (5,3) Red | MoveLimit 3 | 30 |
 | 2 | Bent Path | 8×8 | (0,4) E | (1,4) | (4,7) Yellow | TimeLimit 60s | 50 |
 | 3 | Two Targets | 8×8 | (0,4) E | (2,4) | (5,1) Red, (5,7) Blue | MoveLimit 6 | 75 |
-| 4 | Wall Bounce | 8×8 | (0,2) E | (2,2), wall (4,2) | (6,6) Orange | TimeLimit 75s | 90 |
+| 4 | Wall Bounce | 8×8 | (0,2) E | (2,2), wall (4,2) | (6,6) Green | TimeLimit 75s | 90 |
 | 5 | Double Split | 8×8 | (0,4) E | (2,4), (3,5) | (7,5) Yellow, (3,7) Blue | MoveLimit 5 | 120 |
 
 Level 3 deliberately puts both receivers on the *same* mirror's two diagonal outputs
 (not one straight + one diverted) — a mirror terminates the incoming ray, so anything
 placed on the emitter's own row to divert a second receiver would necessarily block the
 first. Level 4's wall sits on the emitter's straight row *downstream* of the mirror, so
-it blocks only the naive straight shot, not the intended NE-branch solution. Level 5's
+it blocks only the naive straight shot, not the intended NE-branch solution — originally
+required Orange (Red+Yellow) but was changed to Green (Blue+Yellow) since only
+Red/Blue/Yellow/Green have receiver art (see `Receiver` above); the solution's first
+filter changed from Red to Blue to match, mirror/second-filter unchanged. Level 5's
 second mirror receives a **diagonal** incoming direction (NE, not a cardinal) —
 `GridDirection.Reflect` handles this via the same 8-entry table (`Reflect(NE)` → `(N,
 E)`), confirming diagonal-incoming mirrors were already correctly supported by the
@@ -337,8 +394,127 @@ spend-then-apply-then-notify pipeline): `TryUseAddTime()` (gated to `TimeLimit` 
 `HintHighlighter`, checks satisfaction via `BeamSimulator.TryGetPlacement`),
 `TryUseUndo()` (checked for "nothing to undo" *before* spending, so an empty-history
 attempt costs nothing; on success calls `PlacementController.UndoLastPlacement()`).
-Costs/grants live in `PowerupCosts.cs` (const tunables: AddTime 15 coins/+15s, AddMoves
-15 coins/+3 moves, Hint 20 coins, Undo 10 coins).
+Costs/grants are `PowerupController`'s own serialized fields (`addTimeCost`/
+`addTimeSeconds`/`addMovesCost`/`addMovesGrant`/`hintCost`/`undoCost`, defaults matching
+the old constants: AddTime 15 coins/+15s, AddMoves 15 coins/+3 moves, Hint 20 coins,
+Undo 10 coins) — **edit them directly on the `PowerupController` component's Inspector**
+(the `PowerupController` GameObject in `CoreSimTest.unity`). The standalone
+`PowerupCosts.cs` const class this replaced has been deleted; there's no other tunables
+file for these values now.
+
+### Audio (`Managers/AudioManager.cs`)
+Static-`Instance` singleton like `GridManager`/`EconomyManager`, but additionally
+`DontDestroyOnLoad` since it must survive the `MainMenu` → `CoreSimTest` scene load (and
+back via any Menu button). Lives on an `AudioManager` GameObject in `MainMenu.unity`
+(the first scene loaded); guards against a duplicate in `Awake()` (`Destroy(gameObject)`
+if `Instance` is already set — matters if `MainMenu` gets reloaded later while one
+already persists). Owns two `AudioSource`s (`musicSource`: looping,
+`sfxSource`: one-shots via `PlaySfx`/`AudioSource.PlayOneShot`) and a serialized
+`AudioClip` slot per sound: `mainMenuMusic`/`gameplayMusic` (auto-switched via
+`SceneManager.sceneLoaded`, keyed on scene name — `"MainMenu"` vs. anything else) and
+`buttonClickClip`/`placeClip`/`eraseClip`/`winClip`/`loseClip`/`coinClip`/
+`powerupClip`, each with a `PlayX()` convenience wrapper. **All `AudioClip` slots are
+left unassigned** — every call site (`MainMenuManager` Play/Quit,
+`PlacementController` place/erase, `LevelLoader` win/lose, `CoinRewardEffect` per coin
+landed, `PowerupController` all 4 actions, `PlacementTray` mode-select) calls
+`AudioManager.Instance?.PlayX()` unconditionally, which safely no-ops on a null clip —
+assign clips on the `AudioManager` GameObject's Inspector (`MainMenu.unity`) to hear
+them; no code changes needed.
+
+### Ads (`Assets/Plugins/Services/AdsPluginData/`, third-party scaffold)
+Google AdMob test ads (banner, interstitial, rewarded) are wired via a **pre-existing,
+third-party asset pack** — `AdsManager.cs`, `AdmobManager.cs`, `Age.cs`, `SplashLoader.cs`
+under `Assets/Plugins/Services/AdsPluginData/` (global namespace, no `BeamSplit.*`
+prefix), plus the Google Mobile Ads Unity SDK itself under `Assets/GoogleMobileAds/` and
+`Assets/Plugins/Android/`. **This was imported and configured directly in the Unity
+Editor** (SDK import, `Assets/Scenes/SplashScreen.unity` scene build with `AdsManager`/
+`AdmobManager` GameObjects and the `Age_Screen` prefab already instantiated in its
+Canvas, test ad-unit IDs, and the AdMob App ID in
+`Assets/GoogleMobileAds/Resources/GoogleMobileAdsSettings.asset`) — none of that setup
+is BeamSplit's own code and none of it should be re-created; only fix or extend it.
+`SplashScreen.unity` is scene index 0 in Build Settings (`MainMenu` is 1, `CoreSimTest`
+is 2).
+
+- **`AdsManager`** (global namespace) — the orchestration singleton BeamSplit code calls
+  into. Static `Instance`, `DontDestroyOnLoad`, lives on the `AdsManager` GameObject in
+  `SplashScreen.unity`. Public API: `InitializeAds()` (called by `Age.cs` once an age is
+  confirmed/already known), `ShowBanner()`, `ShowInterstitialAd(Action onClosed)`,
+  `ShowRewardedAd(Action onRewarded, Action onAdUnavailable)`. Owns a reference to
+  `AdmobManager` (the actual `GoogleMobileAds.Api` wrapper — banner/interstitial/
+  rewarded/rewarded-interstitial/app-open, age-gated 18+/18-below ad-unit-ID field sets)
+  as a child GameObject.
+- **Why `BeamSplit.Runtime.asmdef` can see `AdsManager` at all**: `AdsManager.cs`/
+  `AdmobManager.cs`/`Age.cs`/`SplashLoader.cs` live under a folder literally named
+  `Plugins`, so before this change Unity compiled them into the predefined
+  `Assembly-CSharp-firstpass` assembly (was visible in scene YAML as
+  `m_EditorClassIdentifier: Assembly-CSharp-firstpass::AdsManager`) — which custom
+  `.asmdef`s **cannot** reference by name (confirmed by a `CS0103` compile error when
+  tried; `Assembly-CSharp-firstpass` isn't a valid asmdef reference target in this Unity
+  version). Fixed by adding `Assets/Plugins/Services/AdsPluginData/AdsPluginData.asmdef`
+  (name `AdsPluginData`, empty `rootNamespace` since the scripts already declare no
+  namespace, references `Unity.TextMeshPro` for `Age.cs`'s `using TMPro;`) — placing an
+  `.asmdef` in that folder makes Unity compile those scripts as their own proper
+  assembly instead of into `Assembly-CSharp-firstpass`, and `BeamSplit.Runtime.asmdef`'s
+  `references` array now lists `"AdsPluginData"` (asmdef-to-asmdef references are the
+  actually-supported mechanism). `GoogleMobileAds` is a precompiled `.dll` plugin,
+  auto-referenced by every assembly regardless of asmdef boundaries, so it needed no
+  explicit reference — but `SplashLoader.cs`'s `DOFillAmount(...)` call (a DOTween *UI
+  module* extension method) hit the exact same problem one level deeper: that extension
+  method lives in `Assets/Plugins/Demigiant/DOTween/Modules/DOTweenModuleUI.cs`, itself a
+  loose source file under another folder named `Plugins`, so it was *also* only visible
+  via the same now-broken `Assembly-CSharp-firstpass` implicit visibility. Fixed the same
+  way: added `Assets/Plugins/Demigiant/DOTween/DOTweenModules.asmdef` and added
+  `"DOTweenModules"` to `AdsPluginData.asmdef`'s `references` array. **Not** named
+  `DOTween` — that collides with the precompiled `DOTween.dll` sitting in the same
+  folder (`CS1704: An assembly with the same simple name 'DOTween' has already been
+  imported`), since Unity assembly names must be unique regardless of whether they come
+  from an `.asmdef` or a `.dll`. If a third similar `CS0103`/`CS1061` shows up from
+  another loose script under a `Plugins` folder, it's the same root cause — give that
+  folder its own `.asmdef` (named anything that doesn't collide with a `.dll` already in
+  scope) and reference it from whichever asmdef needs it, rather than trying to
+  reference a predefined assembly by name. `AdsManager` sits in the global namespace, so
+  no `using` is needed to
+  reference it from inside a `BeamSplit.*` namespace.
+- **`Age.cs`**: age-gate UI (`Age_Screen` prefab). `Start()` calls `Setup()` (this call
+  was originally missing — added so the age gate, and therefore `AdsManager.InitializeAds()`,
+  actually runs; without it no ad ever initializes).
+- **Call sites — every one null-checks `AdsManager.Instance` and falls back to the
+  pre-ads behavior if it's null**, so opening `CoreSimTest.unity` directly (skipping
+  `SplashScreen`/`MainMenu`, the usual way this project gets play-tested) still works:
+  - `LevelLoader.OnNextLevelClicked()` shows an interstitial, then calls the renamed
+    `AdvanceToNextLevel()` (the original next-level logic) in its close callback.
+  - `LevelLoader.HandleTutorialClosed()` calls `AdsManager.Instance?.ShowBanner()` once
+    gameplay starts (banner is a native overlay outside Unity's scene system, so this
+    plus the `MainMenuManager.Start()` call below both keep it up across scene loads).
+  - `LosePanel.Retry()` shows an interstitial, then reloads the scene in its close
+    callback (kept self-contained in `LosePanel` rather than routed through
+    `LevelLoader`, since `Retry` never went through `LevelLoader` to begin with).
+  - `PowerupController`'s 4 methods (`TryUseAddTime`/`TryUseAddMoves`/`TryUseHint`/
+    `TryUseUndo`) each extract their post-spend success logic into a local `Grant()`
+    function; on `economyManager.TrySpend` failing, they call
+    `AdsManager.Instance.ShowRewardedAd(Grant, onNoAd)` instead of just showing "Not
+    enough coins" — completing the ad calls `Grant()` directly (bypassing `TrySpend`
+    entirely, since the player already didn't have the coins); declining/no ad shows
+    "No Ads & Not enough coins Available!". `TryUseHint`'s pre-existing quirk (spend
+    happens before checking whether any hint steps remain) and `TryUseUndo`'s
+    `HasHistory()`-checked-before-spend ordering are both unchanged.
+  - `MainMenuManager.Start()` calls `AdsManager.Instance?.ShowBanner()`.
+- **Known, intentionally-unfixed data mismatch**: `AdmobManager`'s `interstatialId18Plus`/
+  `interstatialId18Below` fields are currently set to the *banner* test ad-unit ID
+  (`.../6300978111`) instead of the interstitial one (`.../1033173712`) — a data mistake
+  in the already-configured scene, not something introduced here. Left as-is at the
+  user's request; don't assume it's a new bug if interstitials misbehave in testing.
+- **Also known, not fixed**: `AdmobManager.SetConfiguration()`'s age-threshold check
+  (`PlayerPrefs.GetInt("UserAge") > childAge`) is compared against `AdmobManager`'s own
+  `childAge` field, which `AdsManager.InitializeAds()` sets to the *current user's own
+  age* immediately beforehand — making the comparison always false, so the "18 Below"
+  ad-unit IDs are always used regardless of actual age. Harmless for testing since both
+  ID sets currently hold identical test IDs; flagged here in case it matters later.
+
+Not implemented: App Open ads, Rewarded Interstitial ads (both present in `AdmobManager`
+but never called from BeamSplit code), and the doc's remaining polish steps (adding a
+"-1" sort-order offset to every Canvas so a real ad iframe doesn't render on top of the
+UI, and small "AD" corner labels on the 4 powerup buttons).
 
 ### UI input-blocking (two independent mechanisms — see `PlacementController` above)
 1. **`isInputEnabled`** (serialized bool, defaults `false` so a misconfigured scene
@@ -379,6 +555,12 @@ with `actionsAsset` left unset — falls back to Unity's auto-generated default 
 actions. **This whole subtree is hand-authored YAML, not yet opened in the Editor —
 see "Required manual Editor steps" below.**
 
+A separate `Canvas` (`Camera Space`, `sortingOrder: -10`, so it renders behind the main
+Canvas) holds a single full-screen decorative `bg` `Image` (art from `Art/BGs/`). Its
+`Raycast Target` must stay disabled — see "Known issues fixed" #4 for why a raycastable
+full-screen background silently blocks all grid input regardless of its render-behind
+sorting order.
+
 Five new scene-resident logic singletons sit alongside the Canvas/EventSystem (plain
 `Transform`, not UI): `EconomyManager`, `ObjectiveController`, `PowerupController`,
 `NotificationManager`, `HintHighlighter` — same "scene-resident, not prefabbed" pattern
@@ -403,9 +585,9 @@ as `GridManager`/`BeamSimulator`.
    in-Editor proxy for an app restart) → Undo/Hint/+Time/+Moves powerups work and
    correctly gate on cost/objective-type → Retry reloads the scene cleanly → Pause stops
    the timer and blocks input, Resume restores both.
-4. **Confirm `TestLevel_Core.asset` still loads without error** when manually selected
-   (regression check that the additive `LevelData` fields didn't break the pre-existing
-   asset).
+4. **Confirm Next Level (WinPanel) actually advances** through `LevelLoader.levels` in
+   order and lands on the main menu after Level 5 (see `LevelProgress`/
+   `OnNextLevelClicked` in "Runtime wiring" below).
 5. Run the EditMode test suite (`GridDirectionTests`, `ColorMixTests`,
    `BeamTracerTests`, `CoinLedgerTests`, `ObjectiveStateTests`, `PlacementHistoryTests`,
    `SaveManagerTests`) via Test Runner or batch mode and confirm all pass.
@@ -437,3 +619,52 @@ values valid), but neither is a substitute for an actual Editor run.
    checks `Touchscreen.current` first, falling back to `Mouse.current` only for Editor
    convenience. Any future input-handling code must remain touch-first for the same
    reason — do not reintroduce mouse-only assumptions.
+3. **All 5 panels' body/message text was white TMP text on a fully opaque white
+   `PanelBackground` `Image`** (`ObjectivePanel`, `TutorialPanel`, `WinPanel`,
+   `LosePanel`'s text components all had `m_fontColor`/`m_Color` at `{1,1,1,1}` against
+   a `PanelBackground` also at `{1,1,1,1}`) — the text was being set and shown correctly
+   (fading in with the panel, `text` string correct) but was invisible, camouflaged
+   against its own background. Fixed by setting each panel's body text color to a dark
+   near-black (`{0.1, 0.1, 0.1, 1}`) instead of touching the (presumably intentional)
+   white card background. If a future panel's text still doesn't show despite the
+   `CanvasGroup` alpha and `.text` value both being confirmed correct via logging, check
+   for this same contrast issue before assuming a script/wiring bug.
+4. **A full-screen decorative background `Image` blocked all grid taps.** A `bg`
+   GameObject (using `Art/BGs/bg (1).png`) was added under a new low-sorting-order
+   Canvas (`sortingOrder: -10`, so it renders behind everything) but kept
+   `m_RaycastTarget: 1` — since `UIRaycastGate.IsPointerOverUI()` uses
+   `EventSystem.IsPointerOverGameObject()`, which doesn't care about visual sorting
+   order, this full-screen raycast target made *every* tap anywhere on screen register
+   as "over UI", silently blocking all mirror/filter placement. Fixed by setting
+   `m_RaycastTarget: 0` on it. Any future purely-decorative full-screen UI element
+   (background art, vignettes, etc.) must have Raycast Target disabled, or it will
+   block input the same way regardless of its Canvas sorting order/visual depth.
+5. **`Receiver.prefab`'s original sprite GUID (`a86470a33a6bf42c4b3595704624658b`, used
+   by both its body `SpriteRenderer` and the `Glow` child) is dangling — it does not
+   resolve to any asset anywhere in the project**, so Receivers rendered invisible. This
+   is why Receivers appeared to "never spawn" even though `LevelLoader.SpawnReceivers`
+   and the simulation logic were both correct — the GameObjects existed, they just had
+   no visible sprite. `Receiver`'s new `colorSprites` reference array (see `Receiver`
+   above) exists so a real sprite can be assigned per color in the Editor to fix this —
+   as of this note that assignment is still outstanding (`bodySpriteRenderer` still
+   falls back to whatever sprite is already on the prefab's SpriteRenderer until a
+   `colorSprites` entry is filled in). If a similarly "nothing appears" symptom shows up
+   again on a different prefab, check for a dangling sprite/material GUID (`grep` the
+   GUID across `Assets/` — a legitimate built-in material like `Sprites-Default` still
+   won't have a matching `.meta`, but a legitimate *project* asset will) before assuming
+   a spawn/logic bug.
+6. **HUD's live objective value (`objectiveLiveValueText`) showed the prefab's raw
+   placeholder text ("New Text") instead of the actual move count / time on level
+   start.** `ObjectiveController.Configure()` fires the initial `OnMovesChanged`/
+   `OnTimeChanged` event synchronously, but `LevelLoader.Start()` calls
+   `objectiveController.Configure(currentLevel)` *before* `hud.Configure(...)` —
+   so that first event fired before `HUD` had subscribed, and nothing else fires one
+   until the player's first placement (`MoveLimit`) or the first `Update()` tick after
+   `BeginRunning()` (`TimeLimit`, which happens to self-correct within a frame — this
+   bug was really only visible on `MoveLimit` levels like Level 1). Fixed by having
+   `HUD.Configure()` pull the current value directly from
+   `objectiveController.MovesRemaining`/`SecondsRemaining` right after subscribing,
+   instead of relying solely on the Configure-time event. Any future
+   subscribe-then-expect-an-initial-event pattern between two `Configure()`-style
+   methods needs to either guarantee subscription happens first or, like this fix,
+   pull the current value explicitly after subscribing.

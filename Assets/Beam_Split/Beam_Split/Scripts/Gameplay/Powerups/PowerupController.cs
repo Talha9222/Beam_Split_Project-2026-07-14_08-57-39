@@ -1,6 +1,7 @@
 using BeamSplit.Data;
 using BeamSplit.Gameplay.Economy;
 using BeamSplit.Gameplay.Objective;
+using BeamSplit.Managers;
 using BeamSplit.UI;
 using UnityEngine;
 
@@ -19,6 +20,14 @@ namespace BeamSplit.Gameplay.Powerups
         [SerializeField] private BeamSimulator beamSimulator;
         [SerializeField] private HintHighlighter hintHighlighter;
 
+        [Header("Powerup Costs")]
+        [SerializeField] private int addTimeCost = 15;
+        [SerializeField] private float addTimeSeconds = 15f;
+        [SerializeField] private int addMovesCost = 15;
+        [SerializeField] private int addMovesGrant = 3;
+        [SerializeField] private int hintCost = 20;
+        [SerializeField] private int undoCost = 10;
+
         private LevelData currentLevel;
 
         public void Configure(LevelData level)
@@ -34,14 +43,27 @@ namespace BeamSplit.Gameplay.Powerups
                 return;
             }
 
-            if (!economyManager.TrySpend(PowerupCosts.AddTimeCost))
+            void Grant()
             {
-                notificationManager?.ShowMessage("Not enough coins");
+                objectiveController.TryAddTime(addTimeSeconds);
+                AudioManager.Instance?.PlayPowerup();
+                notificationManager?.ShowMessage("+15s added");
+            }
+
+            if (economyManager.TrySpend(addTimeCost))
+            {
+                Grant();
                 return;
             }
 
-            objectiveController.TryAddTime(PowerupCosts.AddTimeSeconds);
-            notificationManager?.ShowMessage("+15s added");
+            if (AdsManager.Instance != null)
+            {
+                AdsManager.Instance.ShowRewardedAd(Grant, () => notificationManager?.ShowMessage("No Ads & Not enough coins Available!"));
+            }
+            else
+            {
+                notificationManager?.ShowMessage("Not enough coins");
+            }
         }
 
         public void TryUseAddMoves()
@@ -52,42 +74,68 @@ namespace BeamSplit.Gameplay.Powerups
                 return;
             }
 
-            if (!economyManager.TrySpend(PowerupCosts.AddMovesCost))
+            void Grant()
             {
-                notificationManager?.ShowMessage("Not enough coins");
+                objectiveController.TryAddMoves(addMovesGrant);
+                AudioManager.Instance?.PlayPowerup();
+                notificationManager?.ShowMessage("+3 moves added");
+            }
+
+            if (economyManager.TrySpend(addMovesCost))
+            {
+                Grant();
                 return;
             }
 
-            objectiveController.TryAddMoves(PowerupCosts.AddMovesGrant);
-            notificationManager?.ShowMessage("+3 moves added");
+            if (AdsManager.Instance != null)
+            {
+                AdsManager.Instance.ShowRewardedAd(Grant, () => notificationManager?.ShowMessage("No Ads & Not enough coins Available!"));
+            }
+            else
+            {
+                notificationManager?.ShowMessage("Not enough coins");
+            }
         }
 
         public void TryUseHint()
         {
-            if (!economyManager.TrySpend(PowerupCosts.HintCost))
+            void Grant()
             {
-                notificationManager?.ShowMessage("Not enough coins");
-                return;
-            }
-
-            if (currentLevel == null)
-            {
-                notificationManager?.ShowMessage("No more hints - you are on the solution!");
-                return;
-            }
-
-            foreach (var step in currentLevel.solution)
-            {
-                if (!IsStepSatisfied(step))
+                if (currentLevel == null)
                 {
-                    hintHighlighter?.Show(step.gridPosition);
-                    notificationManager?.ShowMessage(
-                        $"Hint: place {step.kind} at ({step.gridPosition.x},{step.gridPosition.y})");
+                    notificationManager?.ShowMessage("No more hints - you are on the solution!");
                     return;
                 }
+
+                foreach (var step in currentLevel.solution)
+                {
+                    if (!IsStepSatisfied(step))
+                    {
+                        hintHighlighter?.Show(step.gridPosition);
+                        AudioManager.Instance?.PlayPowerup();
+                        notificationManager?.ShowMessage(
+                            $"Hint: place {step.kind} at ({step.gridPosition.x},{step.gridPosition.y})");
+                        return;
+                    }
+                }
+
+                notificationManager?.ShowMessage("No more hints - you are on the solution!");
             }
 
-            notificationManager?.ShowMessage("No more hints - you are on the solution!");
+            if (economyManager.TrySpend(hintCost))
+            {
+                Grant();
+                return;
+            }
+
+            if (AdsManager.Instance != null)
+            {
+                AdsManager.Instance.ShowRewardedAd(Grant, () => notificationManager?.ShowMessage("No Ads & Not enough coins Available!"));
+            }
+            else
+            {
+                notificationManager?.ShowMessage("Not enough coins");
+            }
         }
 
         public void TryUseUndo()
@@ -98,13 +146,26 @@ namespace BeamSplit.Gameplay.Powerups
                 return;
             }
 
-            if (!economyManager.TrySpend(PowerupCosts.UndoCost))
+            void Grant()
             {
-                notificationManager?.ShowMessage("Not enough coins");
+                placementController.UndoLastPlacement();
+                AudioManager.Instance?.PlayPowerup();
+            }
+
+            if (economyManager.TrySpend(undoCost))
+            {
+                Grant();
                 return;
             }
 
-            placementController.UndoLastPlacement();
+            if (AdsManager.Instance != null)
+            {
+                AdsManager.Instance.ShowRewardedAd(Grant, () => notificationManager?.ShowMessage("No Ads & Not enough coins Available!"));
+            }
+            else
+            {
+                notificationManager?.ShowMessage("Not enough coins");
+            }
         }
 
         private bool IsStepSatisfied(SolutionStepData step)

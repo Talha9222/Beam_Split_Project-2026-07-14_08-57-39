@@ -107,6 +107,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   gridPosition: {x: 0, y: 0}
   requiredColor: 0
+  bodySpriteRenderer: {fileID: 212000040001}
+  glowSpriteRenderer: {fileID: 212000040002}
+  colorSprites:
+  - color: 1
+    sprite: {fileID: 5094047839203676440, guid: acf9a9db49fbe974282a2d0db974ad09, type: 3}
+  - color: 2
+    sprite: {fileID: -2144329234367100646, guid: acf9a9db49fbe974282a2d0db974ad09, type: 3}
+  - color: 3
+    sprite: {fileID: -930058404848530059, guid: acf9a9db49fbe974282a2d0db974ad09, type: 3}
+  - color: 5
+    sprite: {fileID: -7427439631875473252, guid: acf9a9db49fbe974282a2d0db974ad09, type: 3}
   OnActivated:
     m_PersistentCalls:
       m_Calls:

@@ -21,7 +21,7 @@ MonoBehaviour:
     initialDirection: 0
   receivers:
   - gridPosition: {x: 6, y: 6}
-    requiredColor: 6
+    requiredColor: 5
     isMoving: 0
     patrolWaypoints: []
   walls:
@@ -42,7 +42,7 @@ MonoBehaviour:
     filterColor: 0
   - gridPosition: {x: 3, y: 3}
     kind: 1
-    filterColor: 1
+    filterColor: 2
   - gridPosition: {x: 4, y: 4}
     kind: 1
     filterColor: 3

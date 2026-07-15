@@ -40,7 +40,16 @@ namespace BeamSplit.UI
 
         private void Retry()
         {
-            SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+            void Reload() => SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+
+            if (AdsManager.Instance != null)
+            {
+                AdsManager.Instance.ShowInterstitialAd(Reload);
+            }
+            else
+            {
+                Reload();
+            }
         }
     }
 }

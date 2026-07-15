@@ -12,6 +12,11 @@ namespace BeamSplit.UI
             if (bodyText != null)
             {
                 bodyText.text = objectiveDescription;
+                Debug.Log($"[ObjectivePanel] bodyText set to: \"{objectiveDescription}\" on {bodyText.name}");
+            }
+            else
+            {
+                Debug.LogError("[ObjectivePanel] bodyText is not assigned; cannot display objective text.");
             }
 
             Show();

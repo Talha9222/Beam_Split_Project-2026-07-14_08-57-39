@@ -5,6 +5,7 @@ using BeamSplit.Gameplay.Objective;
 using BeamSplit.Gameplay.Powerups;
 using BeamSplit.UI;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace BeamSplit.Managers
 {
@@ -19,6 +20,7 @@ namespace BeamSplit.Managers
         private enum LevelState { LoadingData, ShowingObjectives, ShowingTutorial, Playing, Won, Lost }
 
         [SerializeField] private LevelData currentLevel;
+        [SerializeField] private LevelData[] levels;
         [SerializeField] private GridManager gridManager;
         [SerializeField] private BeamSimulator beamSimulator;
         [SerializeField] private Emitter emitterPrefab;
@@ -36,12 +38,22 @@ namespace BeamSplit.Managers
         [SerializeField] private TutorialPanel tutorialPanel;
         [SerializeField] private WinPanel winPanel;
         [SerializeField] private LosePanel losePanel;
+        [SerializeField] private PauseMenu pauseMenu;
+        [SerializeField] private CoinRewardEffect coinRewardEffect;
+
+        [SerializeField] private string mainMenuSceneName = "MainMenu";
 
         private LevelState state;
 
         private void Start()
         {
             state = LevelState.LoadingData;
+
+            if (LevelProgress.PendingLevel != null)
+            {
+                currentLevel = LevelProgress.PendingLevel;
+                LevelProgress.PendingLevel = null;
+            }
 
             if (currentLevel == null || gridManager == null || beamSimulator == null)
             {
@@ -64,6 +76,12 @@ namespace BeamSplit.Managers
 
             hud.Configure(currentLevel, economyManager, objectiveController);
 
+            if (pauseMenu != null)
+            {
+                pauseMenu.IsLevelPlaying = () => IsPlaying;
+                pauseMenu.OnMenuClicked += GoToMainMenu;
+            }
+
             SpawnEmitters();
             SpawnReceivers();
             SpawnWalls();
@@ -72,6 +90,7 @@ namespace BeamSplit.Managers
 
             state = LevelState.ShowingObjectives;
             objectivePanel.OnClosed += HandleObjectivesClosed;
+            Debug.Log($"[LevelLoader] Showing objective panel with description: \"{currentLevel.objectiveDescription}\"");
             objectivePanel.Show(currentLevel.objectiveDescription);
         }
 
@@ -96,20 +115,29 @@ namespace BeamSplit.Managers
             {
                 tutorialPanel.OnClosed -= HandleTutorialClosed;
             }
+
+            if (pauseMenu != null)
+            {
+                pauseMenu.OnMenuClicked -= GoToMainMenu;
+            }
         }
 
         private void SpawnEmitters()
         {
             if (emitterPrefab == null)
             {
+                Debug.LogError("[LevelLoader] SpawnEmitters: emitterPrefab is not assigned; skipping spawn.");
                 return;
             }
 
+            Debug.Log($"[LevelLoader] SpawnEmitters: spawning {currentLevel.emitters.Count} emitter(s).");
             foreach (var data in currentLevel.emitters)
             {
-                var emitter = Instantiate(emitterPrefab, gridManager.GetWorldPosition(data.gridPosition), Quaternion.identity);
+                var worldPos = gridManager.GetWorldPosition(data.gridPosition);
+                var emitter = Instantiate(emitterPrefab, worldPos, Quaternion.identity);
                 emitter.Configure(data.gridPosition, data.initialDirection);
                 beamSimulator.RegisterEmitter(emitter);
+                Debug.Log($"[LevelLoader] Spawned emitter at grid {data.gridPosition} -> world {worldPos}, instance={emitter.name}");
             }
         }
 
@@ -117,14 +145,18 @@ namespace BeamSplit.Managers
         {
             if (receiverPrefab == null)
             {
+                Debug.LogError("[LevelLoader] SpawnReceivers: receiverPrefab is not assigned; skipping spawn.");
                 return;
             }
 
+            Debug.Log($"[LevelLoader] SpawnReceivers: spawning {currentLevel.receivers.Count} receiver(s).");
             foreach (var data in currentLevel.receivers)
             {
-                var receiver = Instantiate(receiverPrefab, gridManager.GetWorldPosition(data.gridPosition), Quaternion.identity);
+                var worldPos = gridManager.GetWorldPosition(data.gridPosition);
+                var receiver = Instantiate(receiverPrefab, worldPos, Quaternion.identity);
                 receiver.Configure(data.gridPosition, data.requiredColor);
                 beamSimulator.RegisterReceiver(receiver);
+                Debug.Log($"[LevelLoader] Spawned receiver at grid {data.gridPosition} -> world {worldPos}, requiredColor={data.requiredColor}, instance={receiver.name}");
             }
         }
 
@@ -156,6 +188,7 @@ namespace BeamSplit.Managers
             placementController.SetInputEnabled(true);
             objectiveController.BeginRunning();
             hud.Show();
+            AdsManager.Instance?.ShowBanner();
         }
 
         private void HandleWin()
@@ -168,13 +201,26 @@ namespace BeamSplit.Managers
             state = LevelState.Won;
             placementController.SetInputEnabled(false);
             objectiveController.StopRunning();
+            AudioManager.Instance?.PlayWin();
 
             int reward = currentLevel.coinReward;
-            economyManager.Award(reward);
 
-            winPanel.OnNextLevelClicked += OnNextLevelStub;
-            winPanel.OnMenuClicked += OnMenuStub;
-            winPanel.Show(reward);
+            winPanel.OnNextLevelClicked += OnNextLevelClicked;
+            winPanel.OnMenuClicked += GoToMainMenu;
+
+            // Coin fly juice ticks the HUD counter up coin-by-coin instead of jumping
+            // straight to the total; WinPanel only appears once every coin has landed.
+            // Degrades to a single instant award + immediate WinPanel if not wired yet
+            // (coinRewardEffect itself also degrades gracefully if coinImagePrefab is unset).
+            if (coinRewardEffect != null)
+            {
+                StartCoroutine(coinRewardEffect.PlayCoinReward(reward, economyManager.Award, () => winPanel.Show(reward)));
+            }
+            else
+            {
+                economyManager.Award(reward);
+                winPanel.Show(reward);
+            }
         }
 
         private void HandleLoseFromObjective()
@@ -193,21 +239,53 @@ namespace BeamSplit.Managers
             state = LevelState.Lost;
             placementController.SetInputEnabled(false);
             objectiveController.StopRunning();
+            AudioManager.Instance?.PlayLose();
 
-            losePanel.OnMenuClicked += OnMenuStub;
+            losePanel.OnMenuClicked += GoToMainMenu;
             losePanel.Show(reason);
         }
 
         public bool IsPlaying => state == LevelState.Playing;
 
-        private void OnMenuStub()
+        private void GoToMainMenu()
         {
-            Debug.Log("[LevelLoader] Menu/Next Level not implemented - no menu/level-select scene exists yet (out of scope this phase).");
+            SceneManager.LoadScene(mainMenuSceneName);
         }
 
-        private void OnNextLevelStub()
+        /// <summary>
+        /// Shows a test interstitial (if AdsManager is present) before advancing; falls
+        /// through immediately if not, so testing CoreSimTest.unity directly without going
+        /// through SplashScreen first still works.
+        /// </summary>
+        private void OnNextLevelClicked()
         {
-            Debug.Log("[LevelLoader] Menu/Next Level not implemented - no menu/level-select scene exists yet (out of scope this phase).");
+            if (AdsManager.Instance != null)
+            {
+                AdsManager.Instance.ShowInterstitialAd(AdvanceToNextLevel);
+            }
+            else
+            {
+                AdvanceToNextLevel();
+            }
+        }
+
+        /// <summary>
+        /// Advances to the next entry in the levels array (by reloading this scene with
+        /// LevelProgress.PendingLevel set - see Start()); goes to the main menu once past
+        /// the last level.
+        /// </summary>
+        private void AdvanceToNextLevel()
+        {
+            int index = levels != null ? System.Array.IndexOf(levels, currentLevel) : -1;
+            if (index >= 0 && index + 1 < levels.Length)
+            {
+                LevelProgress.PendingLevel = levels[index + 1];
+                SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+            }
+            else
+            {
+                GoToMainMenu();
+            }
         }
     }
 }

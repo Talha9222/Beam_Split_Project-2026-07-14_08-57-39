@@ -58,6 +58,18 @@ namespace BeamSplit.UI
             {
                 objectiveController.OnMovesChanged += HandleMovesChanged;
                 objectiveController.OnTimeChanged += HandleTimeChanged;
+
+                // ObjectiveController.Configure() fires the initial OnMovesChanged/OnTimeChanged
+                // event before this subscription exists (LevelLoader configures it earlier in
+                // Start()), so pull the current value directly rather than relying on that event.
+                if (objectiveType == ObjectiveType.MoveLimit)
+                {
+                    HandleMovesChanged(objectiveController.MovesRemaining);
+                }
+                else
+                {
+                    HandleTimeChanged(objectiveController.SecondsRemaining);
+                }
             }
         }
 
