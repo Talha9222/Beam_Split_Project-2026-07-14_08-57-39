@@ -1,3 +1,5 @@
+using BeamSplit.Data;
+using BeamSplit.Managers;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -10,6 +12,8 @@ namespace BeamSplit.UI
         [SerializeField] private TMP_Text reasonText;
         [SerializeField] private Button retryButton;
         [SerializeField] private Button menuButton;
+
+        private LevelData levelToRetry;
 
         public event System.Action OnMenuClicked;
 
@@ -28,8 +32,10 @@ namespace BeamSplit.UI
             }
         }
 
-        public void Show(string reason)
+        public void Show(string reason, LevelData level)
         {
+            levelToRetry = level;
+
             if (reasonText != null)
             {
                 reasonText.text = reason;
@@ -40,11 +46,16 @@ namespace BeamSplit.UI
 
         private void Retry()
         {
-            void Reload() => SceneManager.LoadScene(SceneManager.GetActiveScene().name);
-
-            if (AdsManager.Instance != null)
+            void Reload()
             {
-                AdsManager.Instance.ShowInterstitialAd(Reload);
+                LevelProgress.PendingLevel = levelToRetry;
+                SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+            }
+
+            var ads = AdsManager.Instance != null ? AdsManager.Instance : FindObjectOfType<AdsManager>();
+            if (ads != null)
+            {
+                ads.ShowInterstitialAd(Reload);
             }
             else
             {

@@ -116,8 +116,8 @@ public class AdmobManager : MonoBehaviour
     }
     void InatalizeAds()
     {
-       // LoadAppOpenAd();
-       // AdmobCreateBannerView();
+        LoadAppOpenAd();
+        AdmobCreateBannerView();
         AdmobLoadInterstitialAd();
         AdmobLoadRewardedAd();
     }

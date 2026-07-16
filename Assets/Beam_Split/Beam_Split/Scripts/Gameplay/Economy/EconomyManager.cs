@@ -56,7 +56,10 @@ namespace BeamSplit.Gameplay.Economy
 
         private void Persist()
         {
-            SaveManager.Save(new Data.EconomySaveData { coins = ledger.Coins, schemaVersion = 1 });
+            var save = SaveManager.Load();
+            save.coins = ledger.Coins;
+            save.schemaVersion = 1;
+            SaveManager.Save(save);
         }
     }
 }

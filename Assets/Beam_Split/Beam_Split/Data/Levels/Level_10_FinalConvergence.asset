@@ -10,9 +10,9 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8af03543712b4575ace0d2859905fa13, type: 3}
-  m_Name: Level_05_DoubleSplit
+  m_Name: Level_10_FinalConvergence
   m_EditorClassIdentifier:
-  levelNumber: 5
+  levelNumber: 10
   gridWidth: 8
   gridHeight: 8
   parMirrorCount: 2
@@ -20,36 +20,44 @@ MonoBehaviour:
   - gridPosition: {x: 0, y: 3}
     initialDirection: 0
   receivers:
-  - gridPosition: {x: 3, y: 7}
-    requiredColor: 1
-    isMoving: 0
-    patrolWaypoints: []
-  - gridPosition: {x: 7, y: 4}
+  - gridPosition: {x: 4, y: 7}
     requiredColor: 2
     isMoving: 0
     patrolWaypoints: []
-  walls: []
+  - gridPosition: {x: 7, y: 5}
+    requiredColor: 3
+    isMoving: 0
+    patrolWaypoints: []
+  - gridPosition: {x: 5, y: 0}
+    requiredColor: 1
+    isMoving: 0
+    patrolWaypoints: []
+  walls:
+  - {x: 3, y: 3}
   availableFilterColors:
   - 1
   - 2
   - 3
   mirrorBudget: 2
-  objectiveType: 0
-  moveLimit: 5
-  timeLimitSeconds: 90
-  objectiveDescription: Solve in 5 moves or fewer.
-  coinReward: 120
+  objectiveType: 1
+  moveLimit: 6
+  timeLimitSeconds: 100
+  objectiveDescription: Route all three beams before time runs out.
+  coinReward: 240
   solution:
   - gridPosition: {x: 2, y: 3}
     kind: 0
     filterColor: 0
-  - gridPosition: {x: 3, y: 4}
+  - gridPosition: {x: 4, y: 5}
     kind: 0
     filterColor: 0
-  - gridPosition: {x: 3, y: 5}
-    kind: 1
-    filterColor: 1
-  - gridPosition: {x: 5, y: 4}
+  - gridPosition: {x: 4, y: 6}
     kind: 1
     filterColor: 2
+  - gridPosition: {x: 6, y: 5}
+    kind: 1
+    filterColor: 3
+  - gridPosition: {x: 3, y: 2}
+    kind: 1
+    filterColor: 1
   tutorialText:

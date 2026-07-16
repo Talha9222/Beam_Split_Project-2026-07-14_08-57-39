@@ -56,9 +56,10 @@ namespace BeamSplit.Gameplay.Powerups
                 return;
             }
 
-            if (AdsManager.Instance != null)
+            var ads = AdsManager.Instance != null ? AdsManager.Instance : FindObjectOfType<AdsManager>();
+            if (ads != null)
             {
-                AdsManager.Instance.ShowRewardedAd(Grant, () => notificationManager?.ShowMessage("No Ads & Not enough coins Available!"));
+                ads.ShowRewardedAd(Grant, () => notificationManager?.ShowMessage("No Ads & Not enough coins Available!"));
             }
             else
             {
@@ -87,9 +88,10 @@ namespace BeamSplit.Gameplay.Powerups
                 return;
             }
 
-            if (AdsManager.Instance != null)
+            var ads = AdsManager.Instance != null ? AdsManager.Instance : FindObjectOfType<AdsManager>();
+            if (ads != null)
             {
-                AdsManager.Instance.ShowRewardedAd(Grant, () => notificationManager?.ShowMessage("No Ads & Not enough coins Available!"));
+                ads.ShowRewardedAd(Grant, () => notificationManager?.ShowMessage("No Ads & Not enough coins Available!"));
             }
             else
             {
@@ -128,9 +130,10 @@ namespace BeamSplit.Gameplay.Powerups
                 return;
             }
 
-            if (AdsManager.Instance != null)
+            var ads = AdsManager.Instance != null ? AdsManager.Instance : FindObjectOfType<AdsManager>();
+            if (ads != null)
             {
-                AdsManager.Instance.ShowRewardedAd(Grant, () => notificationManager?.ShowMessage("No Ads & Not enough coins Available!"));
+                ads.ShowRewardedAd(Grant, () => notificationManager?.ShowMessage("No Ads & Not enough coins Available!"));
             }
             else
             {
@@ -158,9 +161,10 @@ namespace BeamSplit.Gameplay.Powerups
                 return;
             }
 
-            if (AdsManager.Instance != null)
+            var ads = AdsManager.Instance != null ? AdsManager.Instance : FindObjectOfType<AdsManager>();
+            if (ads != null)
             {
-                AdsManager.Instance.ShowRewardedAd(Grant, () => notificationManager?.ShowMessage("No Ads & Not enough coins Available!"));
+                ads.ShowRewardedAd(Grant, () => notificationManager?.ShowMessage("No Ads & Not enough coins Available!"));
             }
             else
             {

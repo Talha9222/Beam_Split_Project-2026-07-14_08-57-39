@@ -11,5 +11,6 @@ namespace BeamSplit.Data
     {
         public int coins;
         public int schemaVersion;
+        public int currentLevelIndex;
     }
 }

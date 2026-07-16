@@ -10,22 +10,26 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8af03543712b4575ace0d2859905fa13, type: 3}
-  m_Name: Level_05_DoubleSplit
+  m_Name: Level_09_ColorLab
   m_EditorClassIdentifier:
-  levelNumber: 5
+  levelNumber: 9
   gridWidth: 8
   gridHeight: 8
   parMirrorCount: 2
   emitters:
-  - gridPosition: {x: 0, y: 3}
+  - gridPosition: {x: 0, y: 4}
     initialDirection: 0
   receivers:
-  - gridPosition: {x: 3, y: 7}
+  - gridPosition: {x: 5, y: 7}
+    requiredColor: 5
+    isMoving: 0
+    patrolWaypoints: []
+  - gridPosition: {x: 7, y: 2}
     requiredColor: 1
     isMoving: 0
     patrolWaypoints: []
-  - gridPosition: {x: 7, y: 4}
-    requiredColor: 2
+  - gridPosition: {x: 4, y: 0}
+    requiredColor: 3
     isMoving: 0
     patrolWaypoints: []
   walls: []
@@ -35,21 +39,27 @@ MonoBehaviour:
   - 3
   mirrorBudget: 2
   objectiveType: 0
-  moveLimit: 5
+  moveLimit: 7
+  objectiveDescription: Solve in 7 moves or fewer.
   timeLimitSeconds: 90
-  objectiveDescription: Solve in 5 moves or fewer.
-  coinReward: 120
+  coinReward: 200
   solution:
-  - gridPosition: {x: 2, y: 3}
-    kind: 0
-    filterColor: 0
-  - gridPosition: {x: 3, y: 4}
+  - gridPosition: {x: 2, y: 4}
     kind: 0
     filterColor: 0
   - gridPosition: {x: 3, y: 5}
     kind: 1
-    filterColor: 1
-  - gridPosition: {x: 5, y: 4}
-    kind: 1
     filterColor: 2
+  - gridPosition: {x: 4, y: 6}
+    kind: 1
+    filterColor: 3
+  - gridPosition: {x: 4, y: 2}
+    kind: 0
+    filterColor: 0
+  - gridPosition: {x: 6, y: 2}
+    kind: 1
+    filterColor: 1
+  - gridPosition: {x: 4, y: 1}
+    kind: 1
+    filterColor: 3
   tutorialText:

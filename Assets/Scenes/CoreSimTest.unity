@@ -3903,6 +3903,11 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 2b8730debaa143bcae3cd0c15a1bcb60, type: 2}
   - {fileID: 11400000, guid: df85e7e4fd54422681d221fff6cb767f, type: 2}
   - {fileID: 11400000, guid: ee5c46d6f21c4c23bf87fae1aece7536, type: 2}
+  - {fileID: 11400000, guid: 875f6d7e2150e3ac87f93363f776eb36, type: 2}
+  - {fileID: 11400000, guid: 9c5979057cc5a573d999987c4ca672e9, type: 2}
+  - {fileID: 11400000, guid: d2b69403520d8db61f1ed174d78c4c85, type: 2}
+  - {fileID: 11400000, guid: 5f88b77888ccb849dee95c4244374142, type: 2}
+  - {fileID: 11400000, guid: 6e1300dc39137dc6dd4cf6f615420f40, type: 2}
   gridManager: {fileID: 881967831}
   beamSimulator: {fileID: 314964977}
   emitterPrefab: {fileID: 11400010001, guid: 7720bafcb31a479a9b11c2b154666851, type: 3}

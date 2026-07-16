@@ -54,12 +54,25 @@ namespace BeamSplit.Managers
                 currentLevel = LevelProgress.PendingLevel;
                 LevelProgress.PendingLevel = null;
             }
+            else if (levels != null && levels.Length > 0)
+            {
+                // No same-session hand-off (Retry/Next Level both set PendingLevel) - this is
+                // a fresh scene entry (app launch or Main Menu -> Play), so resume from the
+                // last level saved to PlayerPrefs instead of always restarting at Level 1.
+                int savedIndex = SaveManager.Load().currentLevelIndex;
+                if (savedIndex >= 0 && savedIndex < levels.Length)
+                {
+                    currentLevel = levels[savedIndex];
+                }
+            }
 
             if (currentLevel == null || gridManager == null || beamSimulator == null)
             {
                 Debug.LogError("[LevelLoader] Missing required references; cannot load level.");
                 return;
             }
+
+            PersistCurrentLevel();
 
             gridManager.Configure(currentLevel.gridWidth, currentLevel.gridHeight);
             beamSimulator.Configure(gridManager, currentLevel);
@@ -120,6 +133,25 @@ namespace BeamSplit.Managers
             {
                 pauseMenu.OnMenuClicked -= GoToMainMenu;
             }
+        }
+
+        private void PersistCurrentLevel()
+        {
+            if (levels == null)
+            {
+                return;
+            }
+
+            int index = System.Array.IndexOf(levels, currentLevel);
+            if (index < 0)
+            {
+                return;
+            }
+
+            var save = SaveManager.Load();
+            save.currentLevelIndex = index;
+            save.schemaVersion = 1;
+            SaveManager.Save(save);
         }
 
         private void SpawnEmitters()
@@ -188,7 +220,6 @@ namespace BeamSplit.Managers
             placementController.SetInputEnabled(true);
             objectiveController.BeginRunning();
             hud.Show();
-            AdsManager.Instance?.ShowBanner();
         }
 
         private void HandleWin()
@@ -242,7 +273,7 @@ namespace BeamSplit.Managers
             AudioManager.Instance?.PlayLose();
 
             losePanel.OnMenuClicked += GoToMainMenu;
-            losePanel.Show(reason);
+            losePanel.Show(reason, currentLevel);
         }
 
         public bool IsPlaying => state == LevelState.Playing;
@@ -259,9 +290,10 @@ namespace BeamSplit.Managers
         /// </summary>
         private void OnNextLevelClicked()
         {
-            if (AdsManager.Instance != null)
+            var ads = AdsManager.Instance != null ? AdsManager.Instance : FindObjectOfType<AdsManager>();
+            if (ads != null)
             {
-                AdsManager.Instance.ShowInterstitialAd(AdvanceToNextLevel);
+                ads.ShowInterstitialAd(AdvanceToNextLevel);
             }
             else
             {

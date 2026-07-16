@@ -33,10 +33,10 @@ beam of light enters from a fixed Emitter, and the player places Mirrors (which 
 beam into two 45°-diagonal branches) and Filters (which additively tint a beam's color)
 to route the correct color of light onto each Receiver simultaneously. Full game design
 lives in the spec the user provided (20 levels across 4 phases, full UI, audio,
-monetization) — **the core simulation layer plus objectives/economy/powerups/UI for 5
+monetization) — **the core simulation layer plus objectives/economy/powerups/UI for 10
 levels are implemented so far**, plus audio (`AudioManager`) and test-ad monetization
 (banner/interstitial/rewarded, see "Ads" below) (see "Build status" below); everything
-else (menus, level-select, the other 15 levels, star rating, moving receivers) is
+else (menus, level-select, the other 10 levels, star rating, moving receivers) is
 deferred to later phases.
 
 Target platform is **mobile (touch)**, not desktop — this affects input handling (see
@@ -83,11 +83,14 @@ manual Editor steps" below for the exact checklist.
 
 Since implemented (post-Phase-2, not covered by the paragraph above): a working
 `MainMenu.unity` with real Play/Quit/Next-Level/Retry/Menu navigation (no more stubs —
-see `LevelLoader`'s "Runtime wiring" below), `AudioManager` (see "Audio"), and test-ad
-monetization — banner/interstitial/rewarded (see "Ads"). Still not built: a proper
-level-select scene (Next Level currently just walks `LevelLoader.levels[]` in a fixed
-order), star rating, moving receivers, the other 15 levels (of the planned 20), and final
-art (all Phase 2 UI still uses flat-color placeholder `Image`s, no sliced sprites from
+see `LevelLoader`'s "Runtime wiring" below), `AudioManager` (see "Audio"), test-ad
+monetization — banner/interstitial/rewarded (see "Ads"), and **5 more levels (6–10),
+plus a redesign of Level 5's original geometry** (see "The 10 shipped levels" below) —
+none of these 6 new/changed level assets have been opened in the Editor either, same
+caveat as the original 5. Still not built: a proper level-select scene (Next Level
+currently just walks `LevelLoader.levels[]` in a fixed order), star rating, moving
+receivers, the other 10 levels (of the planned 20), and final art (all Phase 2 UI still
+uses flat-color placeholder `Image`s, no sliced sprites from
 `Art/BEAM SPLIT UI + ASSETS`).
 
 ## Project structure
@@ -119,9 +122,9 @@ Assets/Beam_Split/Beam_Split/
     BeamSplit.Runtime.asmdef   (references Unity.InputSystem, Unity.TextMeshPro)
   Prefabs/             Emitter, MirrorTile, FilterTile, Receiver, BeamLineRenderer, Wall
   Materials/           BeamAdditive.mat
-  Data/Levels/         Level_01_FirstLight .. Level_05_DoubleSplit (the 5 shipped
+  Data/Levels/         Level_01_FirstLight .. Level_10_FinalConvergence (the 10 shipped
                        levels; TestLevel_Core.asset, the original dev-test level, was
-                       deleted — see "5 shipped levels" below)
+                       deleted — see "10 shipped levels" below)
   Art/                 UI source art (BEAM SPLIT UI + ASSETS) — not yet wired into any UI
                        (Phase 2 UI uses flat-color placeholder Images)
 Assets/Scenes/
@@ -132,7 +135,7 @@ Assets/Scenes/
                        ObjectiveController/PowerupController/NotificationManager/
                        HintHighlighter) — see "UI/Canvas hierarchy" below.
                        LevelLoader.currentLevel points at Level_01_FirstLight;
-                       LevelLoader.levels holds all 5 shipped levels in order for
+                       LevelLoader.levels holds all 10 shipped levels in order for
                        real Next Level progression.
   MainMenu.unity       Minimal main-menu scene — Canvas (Bg image, PlayButton, QuitButton)
                        + EventSystem + a scene-resident `MainMenuManager` (plain
@@ -272,13 +275,25 @@ reintroduce RGB float addition).
   `WinPanel`'s Next Level button (`OnNextLevelClicked`) looks up `currentLevel`'s index
   in the `levels` array and, if a next entry exists, sets `LevelProgress.PendingLevel`
   and reloads this same scene (`Start()` picks up `LevelProgress.PendingLevel` before
-  falling back to the serialized `currentLevel`) — past the last level, or with no
+  falling back to the last-saved level — see below) — past the last level, or with no
   `levels` array configured, falls through to the main menu instead. `WinPanel`/
   `LosePanel`/`PauseMenu`'s Menu buttons (`GoToMainMenu`) all call
   `SceneManager.LoadScene(mainMenuSceneName)` (defaults to `"MainMenu"`).
   `PauseMenu.IsLevelPlaying` is wired to `LevelLoader.IsPlaying` in `Start()` so Resume
   doesn't race a win/lose that happened while paused. `LosePanel`'s Retry reloads the
-  active scene (functional, not a stub).
+  active scene — `HandleLose` passes `currentLevel` into `LosePanel.Show(reason, level)`,
+  which `Retry()` stashes and sets as `LevelProgress.PendingLevel` right before the
+  reload, the same hand-off `OnNextLevelClicked` uses; without this the reload would
+  fall through to whichever level is last-saved/serialized instead of the one just
+  failed (this was a real bug — Retry was reloading Level 1 regardless of which level
+  the player was on, since it never told `Start()` which level to resume).
+  `Start()`'s fallback-when-there's-no-`PendingLevel` case (a genuine fresh scene entry
+  — app launch or Main Menu → Play, not a Retry/Next-Level-triggered reload, both of
+  which always set `PendingLevel`) now resumes from `SaveManager.Load().currentLevelIndex`
+  instead of always resetting to the serialized `currentLevel` (Level 1) — see "Save"
+  below. `Start()` also calls a new `PersistCurrentLevel()` right after resolving
+  `currentLevel`, so every level start (fresh, Retry, or Next Level) keeps the saved
+  index in sync.
 
 ### LevelData schema (`Data/LevelData.cs`, ScriptableObject)
 Core (Phase 1, unchanged): `levelNumber`, `gridWidth`/`gridHeight`, `parMirrorCount`
@@ -304,14 +319,14 @@ C# defaults until hand-edited):
 - **Tutorial**: `tutorialText` (per-level override; empty = use
   `TutorialPanel.DefaultTutorialText`).
 
-### The 5 shipped levels (`Data/Levels/Level_01_FirstLight.asset` .. `Level_05_DoubleSplit.asset`)
+### The 10 shipped levels (`Data/Levels/Level_01_FirstLight.asset` .. `Level_10_FinalConvergence.asset`)
 `LevelLoader.currentLevel` in the scene points at `Level_01_FirstLight` (the starting
-level); `LevelLoader.levels` holds all 5 in order for `OnNextLevelClicked` to walk
+level); `LevelLoader.levels` holds all 10 in order for `OnNextLevelClicked` to walk
 through — see "Runtime wiring" below. `TestLevel_Core.asset` (the original dev-test
 6th level, worked example for the mirror-reachability postmortem in "Known issues
-fixed" #1) has been deleted now that the 5 shipped levels are the only ones in play —
+fixed" #1) has been deleted now that the 10 shipped levels are the only ones in play —
 its geometry/solution notes live only in that postmortem entry now, not as a loadable
-asset. All 5 levels' reachability was hand-derived against `GridDirection.Reflect`'s
+asset. All 10 levels' reachability was hand-derived against `GridDirection.Reflect`'s
 table and independently re-verified (`|Δx| == |Δy|` on every diagonal step).
 
 | # | Name | Grid | Emitter | Mirrors | Receivers | Objective | Coins |
@@ -320,7 +335,27 @@ table and independently re-verified (`|Δx| == |Δy|` on every diagonal step).
 | 2 | Bent Path | 8×8 | (0,4) E | (1,4) | (4,7) Yellow | TimeLimit 60s | 50 |
 | 3 | Two Targets | 8×8 | (0,4) E | (2,4) | (5,1) Red, (5,7) Blue | MoveLimit 6 | 75 |
 | 4 | Wall Bounce | 8×8 | (0,2) E | (2,2), wall (4,2) | (6,6) Green | TimeLimit 75s | 90 |
-| 5 | Double Split | 8×8 | (0,4) E | (2,4), (3,5) | (7,5) Yellow, (3,7) Blue | MoveLimit 5 | 120 |
+| 5 | Double Split | 8×8 | (0,3) E | (2,3), (3,4) | (3,7) Red, (7,4) Blue | MoveLimit 5 | 120 |
+| 6 | Triple Threat | 8×8 | (0,2) E | (2,2), (4,4) | (4,0) Yellow, (4,7) Red, (7,4) Blue | TimeLimit 75s | 140 |
+| 7 | Wall & Blend | 8×8 | (0,3) E | (2,3), wall (3,3) | (6,7) Green, (5,0) Red | MoveLimit 5 | 160 |
+| 8 | Cross Current | 8×8 | (0,5) E | (1,5), (3,3), wall (2,5) | (3,7) Yellow, (7,3) Blue | TimeLimit 70s | 180 |
+| 9 | Color Lab | 8×8 | (0,4) E | (2,4), (4,2) | (5,7) Green, (7,2) Red, (4,0) Yellow | MoveLimit 7 | 200 |
+| 10 | Final Convergence | 8×8 | (0,3) E | (2,3), (4,5), wall (3,3) | (4,7) Blue, (7,5) Yellow, (5,0) Red | TimeLimit 100s | 240 |
+
+Level 5 was redesigned from its original geometry (new mirror/receiver coordinates,
+still MoveLimit 5, 120 coins) after it was reported unsolvable in play — the original
+recorded solution data traced out as internally consistent by hand, so the cause wasn't
+visible without an Editor run; rather than chase it, the level was rebuilt from scratch
+with fresh, independently-verified coordinates on the same "one mirror splits into a
+dead branch + a live branch, second mirror splits the live branch into the two
+receivers" pattern. Levels 6–10 continue the odd/even `MoveLimit`/`TimeLimit`
+alternation established by 1–5, escalate to 2 mirrors and up to 3 receivers, and
+introduce two new patterns: a decorative wall blocking only the naive straight shot
+(matching Level 4's, on 7/8/10) and a Blue+Yellow→Green mixed-color receiver (on 7/9) —
+Green is used because it's the only 2-filter mix with receiver art (see `Receiver`
+above; Magenta/Orange are never used as `requiredColor` for the same reason). Level 8's
+second mirror receives a diagonal (`SE`) incoming direction, same pattern already
+proven by Level 5's original design (see "Known issues fixed" #1).
 
 Level 3 deliberately puts both receivers on the *same* mirror's two diagonal outputs
 (not one straight + one diverted) — a mirror terminates the incoming ray, so anything
@@ -381,10 +416,21 @@ coin change.
 
 ### Save (`Managers/SaveManager.cs`)
 Static class, no scene presence. Single versioned JSON blob (`EconomySaveData{coins,
-schemaVersion}`, `JsonUtility`) under one PlayerPrefs key (`"BeamSplit.Save"`).
-`Save()` calls `PlayerPrefs.Save()` explicitly (doesn't rely on Unity's flush-on-quit).
-`schemaVersion` is always written as `1` this phase; `Load()` doesn't branch on it yet
-(no prior version to migrate from) but the field exists for a future format change.
+schemaVersion, currentLevelIndex}`, `JsonUtility`) under one PlayerPrefs key
+(`"BeamSplit.Save"`). `Save()` calls `PlayerPrefs.Save()` explicitly (doesn't rely on
+Unity's flush-on-quit). `schemaVersion` is always written as `1` this phase; `Load()`
+doesn't branch on it yet (no prior version to migrate from) but the field exists for a
+future format change. `currentLevelIndex` (index into `LevelLoader.levels`) was added
+so level progress survives an app restart, not just coins — `LevelLoader.Start()`
+writes it via `PersistCurrentLevel()` on every level start, and reads it back as the
+fallback when there's no `LevelProgress.PendingLevel` (see `LevelLoader` above). Because
+this is one shared blob, **both writers must read-modify-write, not construct a fresh
+`EconomySaveData` from scratch** — `EconomyManager.Persist()` was changed from
+constructing `new EconomySaveData { coins = ..., schemaVersion = 1 }` (which would have
+silently zeroed `currentLevelIndex` back to Level 1 on every coin change) to
+`SaveManager.Load()` → mutate `coins` → `SaveManager.Save()`; `LevelLoader.
+PersistCurrentLevel()` follows the same load-mutate-save pattern for
+`currentLevelIndex`. Any future field added to this blob must follow the same pattern.
 
 ### Powerups (`Gameplay/Powerups/`)
 `PowerupController` (one MonoBehaviour owning all 4 actions — they share the same
@@ -478,14 +524,30 @@ is 2).
 - **`Age.cs`**: age-gate UI (`Age_Screen` prefab). `Start()` calls `Setup()` (this call
   was originally missing — added so the age gate, and therefore `AdsManager.InitializeAds()`,
   actually runs; without it no ad ever initializes).
-- **Call sites — every one null-checks `AdsManager.Instance` and falls back to the
-  pre-ads behavior if it's null**, so opening `CoreSimTest.unity` directly (skipping
-  `SplashScreen`/`MainMenu`, the usual way this project gets play-tested) still works:
+- **Call sites — every one checks for an `AdsManager` and falls back to the pre-ads
+  behavior if none is found**, so opening `CoreSimTest.unity` directly (skipping
+  `SplashScreen`/`MainMenu`, the usual way this project gets play-tested) still works.
+  Each check is `AdsManager.Instance != null ? AdsManager.Instance :
+  FindObjectOfType<AdsManager>()` (not a bare `AdsManager.Instance != null`) — widened
+  because interstitial/rewarded ads were reported never showing on-device (Next
+  Level/Retry/powerups all fell straight through to their no-ad behavior with zero
+  delay, as if the ad was never attempted at all), and a stale/lost static `Instance`
+  reference was the suspected cause; a live `FindObjectOfType` fallback costs nothing
+  extra when `Instance` is already valid. **This is a defensive widening, not a
+  confirmed root-cause fix** — `AdsManager`'s GameObject is a scene root in
+  `SplashScreen.unity` with `DontDestroyOnLoad` correctly called, so nothing in the
+  scene data explains `Instance` going stale; if ads still don't show after this
+  change, the real cause is elsewhere and needs on-device logging (e.g. a `Debug.Log`
+  immediately before each `ShowInterstitialAd`/`ShowRewardedAd` call) to confirm
+  whether these call sites are even being reached. A wait/retry grace period before
+  giving up was considered and explicitly rejected — it would read as the game
+  freezing for a few seconds.
   - `LevelLoader.OnNextLevelClicked()` shows an interstitial, then calls the renamed
     `AdvanceToNextLevel()` (the original next-level logic) in its close callback.
-  - `LevelLoader.HandleTutorialClosed()` calls `AdsManager.Instance?.ShowBanner()` once
-    gameplay starts (banner is a native overlay outside Unity's scene system, so this
-    plus the `MainMenuManager.Start()` call below both keep it up across scene loads).
+  - `LevelLoader.HandleTutorialClosed()` no longer calls `ShowBanner()` — banner is
+    requested once, in `MainMenuManager.Start()`, and persists into gameplay via the
+    banner view's own lifetime (tied to `AdsManager`'s `DontDestroyOnLoad`); the
+    per-level call was redundant.
   - `LosePanel.Retry()` shows an interstitial, then reloads the scene in its close
     callback (kept self-contained in `LosePanel` rather than routed through
     `LevelLoader`, since `Retry` never went through `LevelLoader` to begin with).
@@ -569,24 +631,27 @@ as `GridManager`/`BeamSimulator`.
 ## Required manual Editor steps (not yet verified — no Editor run was available)
 
 1. **Open `CoreSimTest.unity` once.** Treat the entire Phase 2 Canvas/EventSystem/
-   panel/HUD/tray/toast subtree and the 5 new `LevelData` assets as fragile until
-   confirmed clean, per this file's existing hand-authored-YAML policy.
+   panel/HUD/tray/toast subtree and all 10 `LevelData` assets (the original 5 plus the
+   redesigned Level 5 and new Levels 6–10) as fragile until confirmed clean, per this
+   file's existing hand-authored-YAML policy.
 2. **Select the `EventSystem` GameObject and confirm `Input System UI Input Module`
    shows valid (non-error) default bindings** (Unity auto-populates these on first
    Inspector draw when the component was serialized with a null `actionsAsset`). If the
    Inspector shows a warning, click "Assign default actions" — a single click, not a
    rebuild. This is required for touch/mouse-over-UI detection
    (`UIRaycastGate.IsPointerOverUI()`) to work at all.
-3. **Enter Play mode once per level** (switch `LevelLoader.currentLevel` between the 5
+3. **Enter Play mode once per level** (switch `LevelLoader.currentLevel` between the 10
    assets in turn) and confirm: Objectives panel blocks grid taps → Tutorial panel
    blocks grid taps → gameplay becomes interactive on close → HUD shows level
    number/coins/moves-or-time → placing pieces updates the beam and HUD → win/lose
    panels appear at the right moment → coins persist across a Stop/Play cycle (closest
    in-Editor proxy for an app restart) → Undo/Hint/+Time/+Moves powerups work and
    correctly gate on cost/objective-type → Retry reloads the scene cleanly → Pause stops
-   the timer and blocks input, Resume restores both.
+   the timer and blocks input, Resume restores both. Pay particular attention to the
+   redesigned Level 5 and new Levels 6–10 — their solutions are hand-traced, not
+   in-Editor verified.
 4. **Confirm Next Level (WinPanel) actually advances** through `LevelLoader.levels` in
-   order and lands on the main menu after Level 5 (see `LevelProgress`/
+   order and lands on the main menu after Level 10 (see `LevelProgress`/
    `OnNextLevelClicked` in "Runtime wiring" below).
 5. Run the EditMode test suite (`GridDirectionTests`, `ColorMixTests`,
    `BeamTracerTests`, `CoinLedgerTests`, `ObjectiveStateTests`, `PlacementHistoryTests`,
@@ -605,15 +670,15 @@ values valid), but neither is a substitute for an actual Editor run.
    originally placed Receiver B at `(4,7)`, unreachable from a mirror at `(3,4)`'s NE
    branch (which only reaches `(4,5),(5,6),(6,7)`) — moved to `(6,7)`. When authoring
    any future level with mirror-routed receivers, verify reachability against this
-   constraint before assuming a placement bug in the tracer itself. All 5 Phase 2 levels'
-   emitter/mirror/receiver/solution coordinates were hand-derived against
+   constraint before assuming a placement bug in the tracer itself. All 10 Phase 2
+   levels' emitter/mirror/receiver/solution coordinates were hand-derived against
    `GridDirection.Reflect`'s table and independently re-verified programmatically (every
    diagonal step satisfies `|Δx| == |Δy|`) specifically to avoid repeating this bug —
-   see the "5 shipped levels" table above. Level 5 additionally exercises a mirror that
-   receives a **diagonal** incoming direction (its second mirror sees `NE`, not a
-   cardinal) — this was already correctly supported by `GridDirection.Reflect`'s
-   8-entry table without any tracer changes, confirming the table (not just the 4
-   cardinal-incoming rows) was already exhaustive.
+   see the "10 shipped levels" table above. Levels 5 and 8 additionally exercise a
+   mirror that receives a **diagonal** incoming direction (not a cardinal) — this was
+   already correctly supported by `GridDirection.Reflect`'s 8-entry table without any
+   tracer changes, confirming the table (not just the 4 cardinal-incoming rows) was
+   already exhaustive.
 2. **Input was desktop-only at first** (`Mouse.current` only) — this project targets
    **mobile/touch**, not desktop. `PlacementController.TryGetPointerDownPosition` now
    checks `Touchscreen.current` first, falling back to `Mouse.current` only for Editor
