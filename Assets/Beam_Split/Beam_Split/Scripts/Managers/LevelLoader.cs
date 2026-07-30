@@ -236,7 +236,7 @@ namespace BeamSplit.Managers
 
             int reward = currentLevel.coinReward;
 
-            winPanel.OnNextLevelClicked += OnNextLevelClicked;
+            winPanel.OnNextLevelClicked += AdvanceToNextLevel;
             winPanel.OnMenuClicked += GoToMainMenu;
 
             // Coin fly juice ticks the HUD counter up coin-by-coin instead of jumping
@@ -281,24 +281,6 @@ namespace BeamSplit.Managers
         private void GoToMainMenu()
         {
             SceneManager.LoadScene(mainMenuSceneName);
-        }
-
-        /// <summary>
-        /// Shows a test interstitial (if AdsManager is present) before advancing; falls
-        /// through immediately if not, so testing CoreSimTest.unity directly without going
-        /// through SplashScreen first still works.
-        /// </summary>
-        private void OnNextLevelClicked()
-        {
-            var ads = AdsManager.Instance != null ? AdsManager.Instance : FindObjectOfType<AdsManager>();
-            if (ads != null)
-            {
-                ads.ShowInterstitialAd(AdvanceToNextLevel);
-            }
-            else
-            {
-                AdvanceToNextLevel();
-            }
         }
 
         /// <summary>

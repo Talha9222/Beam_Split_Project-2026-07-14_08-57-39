@@ -3,8 +3,7 @@
     "rootNamespace": "BeamSplit",
     "references": [
         "Unity.InputSystem",
-        "Unity.TextMeshPro",
-        "AdsPluginData"
+        "Unity.TextMeshPro"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

@@ -46,21 +46,8 @@ namespace BeamSplit.UI
 
         private void Retry()
         {
-            void Reload()
-            {
-                LevelProgress.PendingLevel = levelToRetry;
-                SceneManager.LoadScene(SceneManager.GetActiveScene().name);
-            }
-
-            var ads = AdsManager.Instance != null ? AdsManager.Instance : FindObjectOfType<AdsManager>();
-            if (ads != null)
-            {
-                ads.ShowInterstitialAd(Reload);
-            }
-            else
-            {
-                Reload();
-            }
+            LevelProgress.PendingLevel = levelToRetry;
+            SceneManager.LoadScene(SceneManager.GetActiveScene().name);
         }
     }
 }

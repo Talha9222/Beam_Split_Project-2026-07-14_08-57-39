@@ -29,11 +29,6 @@ namespace BeamSplit.Managers
             }
         }
 
-        private void Start()
-        {
-            AdsManager.Instance?.ShowBanner();
-        }
-
         private void OnPlayClicked()
         {
             AudioManager.Instance?.PlayButtonClick();

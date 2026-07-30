@@ -34,10 +34,10 @@ beam into two 45°-diagonal branches) and Filters (which additively tint a beam'
 to route the correct color of light onto each Receiver simultaneously. Full game design
 lives in the spec the user provided (20 levels across 4 phases, full UI, audio,
 monetization) — **the core simulation layer plus objectives/economy/powerups/UI for 10
-levels are implemented so far**, plus audio (`AudioManager`) and test-ad monetization
-(banner/interstitial/rewarded, see "Ads" below) (see "Build status" below); everything
-else (menus, level-select, the other 10 levels, star rating, moving receivers) is
-deferred to later phases.
+levels are implemented so far**, plus audio (`AudioManager`) (see "Build status" below);
+ad monetization was wired up (banner/interstitial/rewarded) but has since been removed
+from the game scripts — see "Ads (removed)" below; everything else (menus, level-select,
+the other 10 levels, star rating, moving receivers) is deferred to later phases.
 
 Target platform is **mobile (touch)**, not desktop — this affects input handling (see
 `PlacementController` below); keyboard-only interaction is not acceptable for any
@@ -83,15 +83,23 @@ manual Editor steps" below for the exact checklist.
 
 Since implemented (post-Phase-2, not covered by the paragraph above): a working
 `MainMenu.unity` with real Play/Quit/Next-Level/Retry/Menu navigation (no more stubs —
-see `LevelLoader`'s "Runtime wiring" below), `AudioManager` (see "Audio"), test-ad
-monetization — banner/interstitial/rewarded (see "Ads"), and **5 more levels (6–10),
-plus a redesign of Level 5's original geometry** (see "The 10 shipped levels" below) —
-none of these 6 new/changed level assets have been opened in the Editor either, same
-caveat as the original 5. Still not built: a proper level-select scene (Next Level
-currently just walks `LevelLoader.levels[]` in a fixed order), star rating, moving
-receivers, the other 10 levels (of the planned 20), and final art (all Phase 2 UI still
-uses flat-color placeholder `Image`s, no sliced sprites from
-`Art/BEAM SPLIT UI + ASSETS`).
+see `LevelLoader`'s "Runtime wiring" below), `AudioManager` (see "Audio"), and **5 more
+levels (6–10), plus a redesign of Level 5's original geometry** (see "The 10 shipped
+levels" below) — none of these 6 new/changed level assets have been opened in the Editor
+either, same caveat as the original 5. Test-ad monetization (banner/interstitial/
+rewarded) was also wired up post-Phase-2 but has since been **fully removed** at the
+user's request (all `AdsManager` call sites deleted from game scripts — see "Ads
+(removed)" below — plus the third-party `AdsPluginData` plugin folder, the Google Mobile
+Ads SDK (`Assets/GoogleMobileAds/`, `Assets/Plugins/Android/`, `Assets/Plugins/iOS/`,
+`Assets/ExternalDependencyManager/`), and `Assets/Scenes/SplashScreen.unity` itself were
+all deleted from disk). **`MainMenu.unity` is now scene index 0 in Build Settings,
+`CoreSimTest.unity` is index 1** (`SplashScreen.unity`'s dangling Build Settings entry —
+left behind after the scene file was deleted, which would have broken any build — was
+removed from `ProjectSettings/EditorBuildSettings.asset` in the same cleanup). Still not
+built: a proper level-select scene (Next Level currently just walks
+`LevelLoader.levels[]` in a fixed order), star rating, moving receivers, the other 10
+levels (of the planned 20), and final art (all Phase 2 UI still uses flat-color
+placeholder `Image`s, no sliced sprites from `Art/BEAM SPLIT UI + ASSETS`).
 
 ## Project structure
 
@@ -467,116 +475,59 @@ landed, `PowerupController` all 4 actions, `PlacementTray` mode-select) calls
 assign clips on the `AudioManager` GameObject's Inspector (`MainMenu.unity`) to hear
 them; no code changes needed.
 
-### Ads (`Assets/Plugins/Services/AdsPluginData/`, third-party scaffold)
-Google AdMob test ads (banner, interstitial, rewarded) are wired via a **pre-existing,
-third-party asset pack** — `AdsManager.cs`, `AdmobManager.cs`, `Age.cs`, `SplashLoader.cs`
-under `Assets/Plugins/Services/AdsPluginData/` (global namespace, no `BeamSplit.*`
-prefix), plus the Google Mobile Ads Unity SDK itself under `Assets/GoogleMobileAds/` and
-`Assets/Plugins/Android/`. **This was imported and configured directly in the Unity
-Editor** (SDK import, `Assets/Scenes/SplashScreen.unity` scene build with `AdsManager`/
-`AdmobManager` GameObjects and the `Age_Screen` prefab already instantiated in its
-Canvas, test ad-unit IDs, and the AdMob App ID in
-`Assets/GoogleMobileAds/Resources/GoogleMobileAdsSettings.asset`) — none of that setup
-is BeamSplit's own code and none of it should be re-created; only fix or extend it.
-`SplashScreen.unity` is scene index 0 in Build Settings (`MainMenu` is 1, `CoreSimTest`
-is 2).
+### Ads (fully removed)
+Google AdMob test ads (banner, interstitial, rewarded) were previously wired via a
+third-party asset pack under `Assets/Plugins/Services/AdsPluginData/` (`AdsManager.cs`,
+`AdmobManager.cs`, `Age.cs`, `SplashLoader.cs`, global namespace) plus the Google Mobile
+Ads Unity SDK. **The whole ads system has since been removed, in two passes:**
+1. All calls into `AdsManager` were removed from BeamSplit's own game scripts, reverting
+   each call site to its pre-ads, no-ad behavior:
+   - `LevelLoader`: Next Level (`WinPanel.OnNextLevelClicked`) subscribes directly to
+     `AdvanceToNextLevel()` — the interstitial-then-advance wrapper (`OnNextLevelClicked`)
+     was deleted.
+   - `LosePanel.Retry()` reloads the scene immediately — no interstitial-before-reload.
+   - `MainMenuManager` no longer calls `ShowBanner()` (its now-empty `Start()` override
+     was removed entirely).
+   - `PowerupController`'s 4 methods (`TryUseAddTime`/`TryUseAddMoves`/`TryUseHint`/
+     `TryUseUndo`) no longer fall back to a rewarded ad when `economyManager.TrySpend`
+     fails — they just show "Not enough coins" via `NotificationManager`. The `Grant()`
+     local-function structure in each method is unchanged (still used for the success
+     path).
+   - `BeamSplit.Runtime.asmdef`'s `references` array no longer lists `"AdsPluginData"`.
+2. The user then deleted, entirely from disk: `Assets/Plugins/Services/AdsPluginData/`
+   (all 4 scripts, `Age_Screen.prefab`, its art), `Assets/GoogleMobileAds/` (SDK + Editor
+   tooling), `Assets/Plugins/Android/` (AdMob's Android manifest/gradle templates),
+   `Assets/Plugins/iOS/` (AdMob's iOS native templates), `Assets/ExternalDependencyManager/`
+   (Google's dependency-resolution package used only by the ads SDK), and
+   `Assets/Scenes/SplashScreen.unity` itself (the age-gate + ad-init scene). Confirmed via
+   project-wide grep: no script anywhere references `AdsManager`/`AdmobManager`/
+   `GoogleMobileAds`/`SplashScreen` post-deletion.
 
-- **`AdsManager`** (global namespace) — the orchestration singleton BeamSplit code calls
-  into. Static `Instance`, `DontDestroyOnLoad`, lives on the `AdsManager` GameObject in
-  `SplashScreen.unity`. Public API: `InitializeAds()` (called by `Age.cs` once an age is
-  confirmed/already known), `ShowBanner()`, `ShowInterstitialAd(Action onClosed)`,
-  `ShowRewardedAd(Action onRewarded, Action onAdUnavailable)`. Owns a reference to
-  `AdmobManager` (the actual `GoogleMobileAds.Api` wrapper — banner/interstitial/
-  rewarded/rewarded-interstitial/app-open, age-gated 18+/18-below ad-unit-ID field sets)
-  as a child GameObject.
-- **Why `BeamSplit.Runtime.asmdef` can see `AdsManager` at all**: `AdsManager.cs`/
-  `AdmobManager.cs`/`Age.cs`/`SplashLoader.cs` live under a folder literally named
-  `Plugins`, so before this change Unity compiled them into the predefined
-  `Assembly-CSharp-firstpass` assembly (was visible in scene YAML as
-  `m_EditorClassIdentifier: Assembly-CSharp-firstpass::AdsManager`) — which custom
-  `.asmdef`s **cannot** reference by name (confirmed by a `CS0103` compile error when
-  tried; `Assembly-CSharp-firstpass` isn't a valid asmdef reference target in this Unity
-  version). Fixed by adding `Assets/Plugins/Services/AdsPluginData/AdsPluginData.asmdef`
-  (name `AdsPluginData`, empty `rootNamespace` since the scripts already declare no
-  namespace, references `Unity.TextMeshPro` for `Age.cs`'s `using TMPro;`) — placing an
-  `.asmdef` in that folder makes Unity compile those scripts as their own proper
-  assembly instead of into `Assembly-CSharp-firstpass`, and `BeamSplit.Runtime.asmdef`'s
-  `references` array now lists `"AdsPluginData"` (asmdef-to-asmdef references are the
-  actually-supported mechanism). `GoogleMobileAds` is a precompiled `.dll` plugin,
-  auto-referenced by every assembly regardless of asmdef boundaries, so it needed no
-  explicit reference — but `SplashLoader.cs`'s `DOFillAmount(...)` call (a DOTween *UI
-  module* extension method) hit the exact same problem one level deeper: that extension
-  method lives in `Assets/Plugins/Demigiant/DOTween/Modules/DOTweenModuleUI.cs`, itself a
-  loose source file under another folder named `Plugins`, so it was *also* only visible
-  via the same now-broken `Assembly-CSharp-firstpass` implicit visibility. Fixed the same
-  way: added `Assets/Plugins/Demigiant/DOTween/DOTweenModules.asmdef` and added
-  `"DOTweenModules"` to `AdsPluginData.asmdef`'s `references` array. **Not** named
-  `DOTween` — that collides with the precompiled `DOTween.dll` sitting in the same
-  folder (`CS1704: An assembly with the same simple name 'DOTween' has already been
-  imported`), since Unity assembly names must be unique regardless of whether they come
-  from an `.asmdef` or a `.dll`. If a third similar `CS0103`/`CS1061` shows up from
-  another loose script under a `Plugins` folder, it's the same root cause — give that
-  folder its own `.asmdef` (named anything that doesn't collide with a `.dll` already in
-  scope) and reference it from whichever asmdef needs it, rather than trying to
-  reference a predefined assembly by name. `AdsManager` sits in the global namespace, so
-  no `using` is needed to
-  reference it from inside a `BeamSplit.*` namespace.
-- **`Age.cs`**: age-gate UI (`Age_Screen` prefab). `Start()` calls `Setup()` (this call
-  was originally missing — added so the age gate, and therefore `AdsManager.InitializeAds()`,
-  actually runs; without it no ad ever initializes).
-- **Call sites — every one checks for an `AdsManager` and falls back to the pre-ads
-  behavior if none is found**, so opening `CoreSimTest.unity` directly (skipping
-  `SplashScreen`/`MainMenu`, the usual way this project gets play-tested) still works.
-  Each check is `AdsManager.Instance != null ? AdsManager.Instance :
-  FindObjectOfType<AdsManager>()` (not a bare `AdsManager.Instance != null`) — widened
-  because interstitial/rewarded ads were reported never showing on-device (Next
-  Level/Retry/powerups all fell straight through to their no-ad behavior with zero
-  delay, as if the ad was never attempted at all), and a stale/lost static `Instance`
-  reference was the suspected cause; a live `FindObjectOfType` fallback costs nothing
-  extra when `Instance` is already valid. **This is a defensive widening, not a
-  confirmed root-cause fix** — `AdsManager`'s GameObject is a scene root in
-  `SplashScreen.unity` with `DontDestroyOnLoad` correctly called, so nothing in the
-  scene data explains `Instance` going stale; if ads still don't show after this
-  change, the real cause is elsewhere and needs on-device logging (e.g. a `Debug.Log`
-  immediately before each `ShowInterstitialAd`/`ShowRewardedAd` call) to confirm
-  whether these call sites are even being reached. A wait/retry grace period before
-  giving up was considered and explicitly rejected — it would read as the game
-  freezing for a few seconds.
-  - `LevelLoader.OnNextLevelClicked()` shows an interstitial, then calls the renamed
-    `AdvanceToNextLevel()` (the original next-level logic) in its close callback.
-  - `LevelLoader.HandleTutorialClosed()` no longer calls `ShowBanner()` — banner is
-    requested once, in `MainMenuManager.Start()`, and persists into gameplay via the
-    banner view's own lifetime (tied to `AdsManager`'s `DontDestroyOnLoad`); the
-    per-level call was redundant.
-  - `LosePanel.Retry()` shows an interstitial, then reloads the scene in its close
-    callback (kept self-contained in `LosePanel` rather than routed through
-    `LevelLoader`, since `Retry` never went through `LevelLoader` to begin with).
-  - `PowerupController`'s 4 methods (`TryUseAddTime`/`TryUseAddMoves`/`TryUseHint`/
-    `TryUseUndo`) each extract their post-spend success logic into a local `Grant()`
-    function; on `economyManager.TrySpend` failing, they call
-    `AdsManager.Instance.ShowRewardedAd(Grant, onNoAd)` instead of just showing "Not
-    enough coins" — completing the ad calls `Grant()` directly (bypassing `TrySpend`
-    entirely, since the player already didn't have the coins); declining/no ad shows
-    "No Ads & Not enough coins Available!". `TryUseHint`'s pre-existing quirk (spend
-    happens before checking whether any hint steps remain) and `TryUseUndo`'s
-    `HasHistory()`-checked-before-spend ordering are both unchanged.
-  - `MainMenuManager.Start()` calls `AdsManager.Instance?.ShowBanner()`.
-- **Known, intentionally-unfixed data mismatch**: `AdmobManager`'s `interstatialId18Plus`/
-  `interstatialId18Below` fields are currently set to the *banner* test ad-unit ID
-  (`.../6300978111`) instead of the interstitial one (`.../1033173712`) — a data mistake
-  in the already-configured scene, not something introduced here. Left as-is at the
-  user's request; don't assume it's a new bug if interstitials misbehave in testing.
-- **Also known, not fixed**: `AdmobManager.SetConfiguration()`'s age-threshold check
-  (`PlayerPrefs.GetInt("UserAge") > childAge`) is compared against `AdmobManager`'s own
-  `childAge` field, which `AdsManager.InitializeAds()` sets to the *current user's own
-  age* immediately beforehand — making the comparison always false, so the "18 Below"
-  ad-unit IDs are always used regardless of actual age. Harmless for testing since both
-  ID sets currently hold identical test IDs; flagged here in case it matters later.
+**Fallout fixed in the same cleanup**: deleting `SplashScreen.unity` left a dangling
+entry in `ProjectSettings/EditorBuildSettings.asset` (Build Settings still listed it as
+scene index 0, pointing at a file that no longer existed) — this would break any build.
+Removed that entry; `MainMenu.unity` is now index 0, `CoreSimTest.unity` is index 1 (see
+"Project structure" above). All remaining `SceneManager.LoadScene(...)` calls in the
+codebase already use scene **names**, not build indices, so nothing else needed updating.
 
-Not implemented: App Open ads, Rewarded Interstitial ads (both present in `AdmobManager`
-but never called from BeamSplit code), and the doc's remaining polish steps (adding a
-"-1" sort-order offset to every Canvas so a real ad iframe doesn't render on top of the
-UI, and small "AD" corner labels on the 4 powerup buttons).
+The user then also deleted `Assets/Plugins/Demigiant/DOTween/` (the whole plugin,
+including `DOTweenModules.asmdef`) entirely — it only existed so `SplashLoader.cs`
+(deleted along with the rest of `AdsPluginData`) could call `DOFillAmount`; nothing
+under `BeamSplit.*` ever used DOTween. Confirmed via project-wide grep: no remaining
+`DOTween`/`DG.Tweening` references anywhere in `Assets/` except one harmless orphan —
+`Assets/Resources/DOTweenSettings.asset` (DOTween's own auto-generated config asset,
+now pointing at a deleted script type). It isn't loaded by anything since the plugin
+that would read it is gone; left in place since deleting it wasn't asked for, but it's
+safe to delete whenever.
+
+**Note on asmdef files generally**: `.asmdef` files (`BeamSplit.Runtime.asmdef`,
+`BeamSplit.Tests.Editor.asmdef` — the only two left in the project) are a Unity
+Editor-only compile-time construct — they control which `.dll` a script compiles into
+and have no runtime-visible effect. They are not a plausible cause of an App Store "still in testing"
+rejection; that phrasing is almost always about visible in-app content (e.g. the AdMob
+test-ad watermark this cleanup already removed), not project structure. Don't remove
+asmdefs as an App-Store-rejection fix without first confirming the actual rejection
+reason.
 
 ### UI input-blocking (two independent mechanisms — see `PlacementController` above)
 1. **`isInputEnabled`** (serialized bool, defaults `false` so a misconfigured scene
